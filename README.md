@@ -12,7 +12,8 @@ procedurally in code. No external models are downloaded.
 
 ## Play
 - **Desktop:** ← → / A D change lane, ↑ / W / Space jump, ↓ / S roll
-- **Mobile:** swipe left, right, up or down
+- **Mobile:** swipe left, right, up or down; tap to start
+- **Pause:** Esc / P or the pause button
 
 ## Run locally
 Requires Node.js 20 or newer.
@@ -43,8 +44,14 @@ update `REPO_BASE` there to match.
 src/
   main.ts              entry point
   config.ts            all gameplay tunables in one place
-  render/              toon materials, outlines, post-processing
-  utils/               small pure helpers
+  game/                Game loop and states, World (pooled track chunks),
+                       TrackLayout, Lanes, Difficulty, CameraRig
+  entities/            PlayerController (pure movement logic) and Player (view)
+  input/               keyboard + swipe input, SwipeDetector (pure)
+  models/              procedural builders (Golden Teapot, more to come)
+  render/              renderer, toon materials, outlines
+  ui/                  HTML/CSS overlays (HUD)
+  utils/               small pure helpers (math, seeded random)
 tests/                 Vitest unit tests for pure logic
 ```
 
