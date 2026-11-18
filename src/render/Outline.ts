@@ -28,6 +28,9 @@ export function getOutlineMaterial(thickness: number = CONFIG.render.outlineThic
           // Push along the object-space normal, corrected for non-uniform scale.
           vec3 n = normalize(objectNormal);
           vec3 scale = vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz));
+          #ifdef USE_INSTANCING
+            scale *= vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+          #endif
           transformed += n * uThickness / max(scale, vec3(1e-4));
           #include <project_vertex>
         }
@@ -51,13 +54,37 @@ export function getOutlineMaterial(thickness: number = CONFIG.render.outlineThic
  * The hull shares the source geometry, so it costs no extra memory.
  */
 export function addOutline(mesh: THREE.Mesh, thickness?: number): THREE.Mesh {
-  const hull = new THREE.Mesh(mesh.geometry, getOutlineMaterial(thickness));
+  const mat = getOutlineMaterial(thickness);
+  let hull: THREE.Mesh;
+  if ((mesh as THREE.InstancedMesh).isInstancedMesh) {
+    // Share the instance matrices so the hull always follows its source instances.
+    const src = mesh as THREE.InstancedMesh;
+    const inst = new THREE.InstancedMesh(src.geometry, mat, src.count);
+    inst.instanceMatrix = src.instanceMatrix;
+    inst.frustumCulled = src.frustumCulled;
+    hull = inst;
+  } else {
+    hull = new THREE.Mesh(mesh.geometry, mat);
+  }
   hull.name = 'outline';
   hull.castShadow = false;
   hull.receiveShadow = false;
   hull.raycast = () => {};
   mesh.add(hull);
   return hull;
+}
+
+/** Recompute bounds for an instanced mesh and its outline hull after moving instances. */
+export function refreshInstancedBounds(mesh: THREE.InstancedMesh): void {
+  mesh.computeBoundingSphere();
+  for (const c of mesh.children) {
+    if ((c as THREE.InstancedMesh).isInstancedMesh) {
+      const hull = c as THREE.InstancedMesh;
+      hull.count = mesh.count;
+      hull.boundingSphere = mesh.boundingSphere;
+      hull.boundingBox = null;
+    }
+  }
 }
 
 /** Outline every mesh under `root` (skipping existing hulls). */
