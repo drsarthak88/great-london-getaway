@@ -4,8 +4,10 @@ import type { Coin, CoinKind } from '../game/Track';
 import { coinParts } from '../models/Props';
 import { outlineTree } from '../render/Outline';
 
-const KINDS: CoinKind[] = ['penny', 'sovereign', 'token'];
-const CAPS: Record<CoinKind, number> = { penny: 200, sovereign: 24, token: 6 };
+/** Power-up pickups have their own views (PowerUpViews). */
+type DrawnKind = Exclude<CoinKind, 'power'>;
+const KINDS: DrawnKind[] = ['penny', 'sovereign', 'token'];
+const CAPS: Record<DrawnKind, number> = { penny: 200, sovereign: 24, token: 6 };
 /** Coins further ahead than this are hidden by fog anyway. */
 const DRAW_AHEAD = 130;
 
@@ -15,8 +17,8 @@ const DRAW_AHEAD = 130;
  * for spin and bob, which is cheap and allocation-free.
  */
 export class CoinViews {
-  private readonly meshes = new Map<CoinKind, THREE.InstancedMesh>();
-  private readonly hulls = new Map<CoinKind, THREE.InstancedMesh>();
+  private readonly meshes = new Map<DrawnKind, THREE.InstancedMesh>();
+  private readonly hulls = new Map<DrawnKind, THREE.InstancedMesh>();
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
   private readonly p = new THREE.Vector3();

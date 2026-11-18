@@ -14,6 +14,8 @@ import { buildTeapot } from './Teapot';
  * Proportions are chunky-cartoon: big head, short legs. Feet at y = 0, facing -z.
  */
 export interface CatRig extends BipedRig {
+  handL: THREE.Group;
+  handR: THREE.Group;
   /** Where hats and accessories attach (top of the head). */
   hatMount: THREE.Group;
   /** Where the scarf/collar sits (base of the neck). */

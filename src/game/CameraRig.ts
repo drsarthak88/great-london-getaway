@@ -32,11 +32,11 @@ export class CameraRig {
    * Follow the player. The camera rises fully with the surface underfoot (so bus roofs
    * frame like the road) but only partly with jumps (so jumps read as height).
    */
-  update(dt: number, playerX: number, playerY: number, portrait: boolean, groundY = 0): void {
+  update(dt: number, playerX: number, playerY: number, portrait: boolean, groundY = 0, followY: number = CONFIG.camera.followY): void {
     const c = CONFIG.camera;
     this.x = damp(this.x, playerX * c.followX, c.dampX, dt);
     this.ground = damp(this.ground, groundY, 4, dt);
-    this.y = damp(this.y, this.ground + (playerY - this.ground) * c.followY, c.dampY, dt);
+    this.y = damp(this.y, this.ground + (playerY - this.ground) * followY, c.dampY, dt);
     const height = portrait ? c.portraitHeight : c.height;
     const dist = portrait ? c.portraitDistance : c.distance;
     this.time += dt;

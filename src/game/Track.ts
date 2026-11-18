@@ -3,16 +3,21 @@ import { PATTERNS, type Pattern } from '../data/patterns';
 import { OBSTACLES, Obstacle } from './ObstacleTypes';
 import { laneX } from './Lanes';
 import { mulberry32 } from '../utils/random';
+import { pickPower, type PowerKind } from '../powerups/PowerUps';
 
-export type CoinKind = 'penny' | 'sovereign' | 'token';
+/** Collectibles on the road. 'power' is a power-up pickup (see `power`). */
+export type CoinKind = 'penny' | 'sovereign' | 'token' | 'power';
 
 export class Coin {
   active = false;
   kind: CoinKind = 'penny';
+  power: PowerKind = 'magnet';
   x = 0;
   y = 0;
   d = 0;
   lane = 0;
+  /** Being pulled in by the Teacup Magnet. */
+  pulled = false;
 }
 
 const LANES = [-1, 0, 1] as const;
@@ -39,6 +44,12 @@ export class Track {
   readonly reserved = [-Infinity, -Infinity, -Infinity];
   private rng = mulberry32(1);
   private nextTokenAt = 0;
+  private nextPowerAt = 0;
+  /** Helicopter Tail coin trail in the sky: laid down until `skyUntil`. */
+  private skyUntil = -Infinity;
+  private skyNextD = 0;
+  private skyLane = 0;
+  private skyY = 0;
   private lastPattern = '';
   private readonly order = [0, 1, 2, 3, 4, 5];
 
@@ -55,6 +66,8 @@ export class Track {
     this.level = 0;
     this.reserved[0] = this.reserved[1] = this.reserved[2] = -Infinity;
     this.nextTokenAt = this.randRange(CONFIG.coins.tokenEvery[0], CONFIG.coins.tokenEvery[1]);
+    this.nextPowerAt = CONFIG.obstacles.firstAt + this.randRange(CONFIG.powerups.spawnEvery[0] * 0.4, CONFIG.powerups.spawnEvery[1] * 0.6);
+    this.skyUntil = -Infinity;
     this.lastPattern = '';
   }
 
@@ -73,6 +86,41 @@ export class Track {
     this.level = Math.min(CONFIG.obstacles.maxLevel, Math.floor(distance / CONFIG.obstacles.levelEvery));
     while (this.nextD < distance + CONFIG.obstacles.spawnAhead) {
       this.spawnNext(distance, speed);
+    }
+    this.layDownSkyTrail(distance);
+  }
+
+  /**
+   * Helicopter Tail: lay a weaving trail of coins at flying height from just ahead of
+   * the player up to `until`, a little at a time as the player advances.
+   */
+  startSkyTrail(fromD: number, until: number, y: number, lane: number): void {
+    this.skyNextD = fromD;
+    this.skyUntil = until;
+    this.skyY = y;
+    this.skyLane = lane;
+  }
+
+  stopSkyTrail(): void {
+    this.skyUntil = -Infinity;
+  }
+
+  private layDownSkyTrail(distance: number): void {
+    const limit = Math.min(this.skyUntil, distance + 60);
+    const spacing = CONFIG.coins.spacing * 1.4;
+    while (this.skyNextD < limit) {
+      // Drift to a neighbouring lane now and then so the trail weaves.
+      if (this.rng() < 0.08) this.skyLane = Math.max(-1, Math.min(1, this.skyLane + (this.rng() < 0.5 ? -1 : 1)));
+      const c = this.allocCoin();
+      if (!c) return;
+      c.active = true;
+      c.pulled = false;
+      c.kind = this.rng() < CONFIG.coins.sovereignChance * 2 ? 'sovereign' : 'penny';
+      c.lane = this.skyLane;
+      c.x = laneX(this.skyLane);
+      c.y = this.skyY + 0.3;
+      c.d = this.skyNextD;
+      this.skyNextD += spacing;
     }
   }
 
@@ -97,6 +145,9 @@ export class Track {
     if (D >= this.nextTokenAt) {
       this.spawnToken(D - gap / 2);
       this.nextTokenAt += this.randRange(CONFIG.coins.tokenEvery[0], CONFIG.coins.tokenEvery[1]);
+    } else if (D >= this.nextPowerAt) {
+      this.spawnPower(D - gap / 2);
+      this.nextPowerAt = D + this.randRange(CONFIG.powerups.spawnEvery[0], CONFIG.powerups.spawnEvery[1]);
     }
   }
 
@@ -163,6 +214,7 @@ export class Track {
         const surface = surfaceInPattern(p, run.slot, at);
         const lift = run.low ? 0.4 : CONFIG.coins.hover + (run.arc ? run.arc * Math.sin(Math.PI * t) : 0);
         c.active = true;
+        c.pulled = false;
         c.kind = this.rng() < CONFIG.coins.sovereignChance ? 'sovereign' : 'penny';
         c.lane = lane;
         c.x = laneX(lane);
@@ -178,10 +230,27 @@ export class Track {
     const c = this.allocCoin();
     if (!c) return;
     c.active = true;
+    c.pulled = false;
     c.kind = 'token';
     c.lane = lane;
     c.x = laneX(lane);
     c.y = 1.1;
+    c.d = d;
+  }
+
+  /** Place a floating power-up pickup in the clear road between patterns. */
+  private spawnPower(d: number): void {
+    const lane = LANES[Math.floor(this.rng() * 3)];
+    if (d < this.reserved[lane + 1]) return;
+    const c = this.allocCoin();
+    if (!c) return;
+    c.active = true;
+    c.pulled = false;
+    c.kind = 'power';
+    c.power = pickPower(this.rng());
+    c.lane = lane;
+    c.x = laneX(lane);
+    c.y = 1.15;
     c.d = d;
   }
 

@@ -28,6 +28,7 @@ export class Score {
 
   /** Returns the coin value collected. */
   addCoin(kind: CoinKind): number {
+    if (kind === 'power') return 0;
     if (kind === 'token') {
       this.tokens++;
       return 0;

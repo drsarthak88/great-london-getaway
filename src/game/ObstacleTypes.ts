@@ -100,6 +100,8 @@ export class Obstacle {
   stoodOn = false;
   /** Bumped every time the slot is reused, so views can tell a respawn apart. */
   gen = 0;
+  /** Sent flying by the Black Cab Dash (no longer collides). */
+  knocked = false;
 
   set(kind: ObstacleKind, lane: number, x: number, d: number, vel = 0): this {
     this.active = true;
@@ -113,6 +115,7 @@ export class Obstacle {
     this.vel = vel;
     this.hit = false;
     this.stoodOn = false;
+    this.knocked = false;
     return this;
   }
 

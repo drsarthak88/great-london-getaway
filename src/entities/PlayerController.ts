@@ -39,6 +39,11 @@ export class PlayerController {
   /** Multipliers that power-ups change (Spring Tail, Brolly Glide). */
   jumpMultiplier = 1;
   gravityMultiplier = 1;
+  /** Helicopter Tail: cruise at `flyHeight`, ignoring the ground. */
+  flying = false;
+  flyHeight = 0;
+  /** Black Cab Dash: wheels on the road, no jumping or rolling. */
+  driving = false;
 
   /** One-frame event flags, valid until the next clearEvents(). */
   justJumped = false;
@@ -72,6 +77,9 @@ export class PlayerController {
     this.rollQueued = false;
     this.jumpMultiplier = 1;
     this.gravityMultiplier = 1;
+    this.flying = false;
+    this.flyHeight = 0;
+    this.driving = false;
     this.clearEvents();
   }
 
@@ -111,7 +119,7 @@ export class PlayerController {
 
   /** Jump if standing (a jump cancels a roll). Returns true if a jump started. */
   jump(): boolean {
-    if (!this.grounded) return false;
+    if (!this.grounded || this.flying || this.driving) return false;
     this.rolling = false;
     this.rollTimer = 0;
     this.rollQueued = false;
@@ -124,6 +132,7 @@ export class PlayerController {
 
   /** Roll on the ground; in the air, slam down quickly and roll on landing. */
   roll(): void {
+    if (this.flying || this.driving) return;
     if (this.grounded) {
       this.rolling = true;
       this.rollTimer = this.tuning.rollDuration;
@@ -141,6 +150,18 @@ export class PlayerController {
     const dx = tx - this.x;
     this.x = Math.abs(dx) <= maxStep ? tx : this.x + Math.sign(dx) * maxStep;
     this.vx = dt > 0 ? (this.x - prevX) / dt : 0;
+
+    // --- Helicopter Tail: glide smoothly up to cruising height and hold it.
+    if (this.flying) {
+      const prevY = this.y;
+      this.y += (this.flyHeight - this.y) * (1 - Math.exp(-3 * dt));
+      this.vy = dt > 0 ? (this.y - prevY) / dt : 0;
+      this.grounded = false;
+      this.rolling = false;
+      this.rollTimer = 0;
+      this.rollQueued = false;
+      return;
+    }
 
     // --- Walked off a ledge (e.g. the end of a bus roof): start falling.
     if (this.grounded && this.y > this.groundY + 1e-3) {
