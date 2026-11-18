@@ -384,6 +384,13 @@ export class AudioEngine {
       case 'start':
         this.setMusic('run');
         break;
+      case 'reset':
+        // Quitting mid-power-up must not leave a rotor or engine humming on the menu.
+        this.stopLoops();
+        this.setTempo(1);
+        this.paused = false;
+        this.applyVolumes();
+        break;
       case 'pause':
         this.paused = true;
         this.applyVolumes();

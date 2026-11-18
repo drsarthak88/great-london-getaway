@@ -78,6 +78,11 @@ export class PowerUps {
     this.onEnd(kind);
   }
 
+  /** End every active power-up (firing onEnd for each), e.g. when Jack is caught. */
+  endAll(): void {
+    for (const k of POWER_KINDS) this.end(k);
+  }
+
   /** The helmet takes the hit: returns true if a shield was there to use. */
   consumeShield(): boolean {
     if (!this.isActive('helmet')) return false;

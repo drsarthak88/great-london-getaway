@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
+import { setOutlinePixelSize } from './Outline';
 
 /**
  * Owns the WebGL renderer, the scene, its sky and lights, and the main camera.
@@ -80,6 +81,7 @@ export class Renderer {
     this.ratio = r;
     this.renderer.setPixelRatio(r);
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
+    setOutlinePixelSize(this.camera.fov, window.innerHeight * r);
   }
 
   private resize = (): void => {
@@ -90,6 +92,7 @@ export class Renderer {
     this.camera.aspect = w / h;
     this.camera.fov = this.portrait ? CONFIG.render.fovPortrait : CONFIG.render.fov;
     this.camera.updateProjectionMatrix();
+    setOutlinePixelSize(this.camera.fov, h * this.renderer.getPixelRatio());
     for (const fn of this.resizeListeners) fn();
   };
 }
