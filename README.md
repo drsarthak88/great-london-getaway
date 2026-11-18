@@ -43,6 +43,27 @@ ring in the corner), and shop upgrades make them last longer.
 Helicopter, Spring, Brolly and Cab change how Jack moves, so picking one of them up
 replaces another. The others stack.
 
+## London zones
+The run cycles through eight bright, storybook parts of London, each with its own
+colours and landmarks. A banner announces each zone, and a "Did you know?" postcard
+pops up with a true fact the first time each landmark appears.
+
+1. **Westminster**: the Houses of Parliament and Big Ben (its clock shows the real time)
+2. **South Bank**: the London Eye turning slowly beside the turquoise Thames
+3. **Tower Bridge**: the Tower of London and its ravens, then the road crosses the
+   bridge, where lifted bascules leave gaps you must jump
+4. **Buckingham Palace & The Mall**: a red road, park trees, the palace, the Victoria
+   Memorial and extra Royal Guards
+5. **Trafalgar Square & Piccadilly Circus**: Nelson's Column and its lions, and bright
+   screens with made-up adverts
+6. **Baker Street**: warm brick terraces, gas lamps and the 221B door; Inspector Bones
+   knows these streets and is faster here
+7. **St Paul's & the City**: the great dome, with the Shard and the Gherkin on the skyline
+8. **Camden & Notting Hill**: rainbow houses, market stalls and carnival bunting
+
+**Weather:** fog patches (a soft lilac pea-souper where the lanterns glow) and
+drizzle showers (rain and extra puddles), followed by a rainbow.
+
 ## Run locally
 Requires Node.js 20 or newer.
 
@@ -89,12 +110,14 @@ src/
   game/                Game loop and states, World (pooled street chunks),
                        Track (obstacle/coin spawner), Collision rules, Score,
                        Chase (stumbles and catches), Lanes, Difficulty, CameraRig
-  data/                obstacle patterns (each one tested to leave a way through)
+  data/                obstacle patterns (each one tested to leave a way through),
+                       zones (palettes, landmarks, rivers, bridge), postcard facts
   entities/            PlayerController (pure movement logic), Player and Detective
                        views, CharacterAnimator + Poses (procedural animation),
                        pooled obstacle views and instanced coins
   input/               keyboard + swipe input, SwipeDetector (pure)
-  models/              procedural builders: Biped rig, Cat (Jack), Detective,
+  models/              procedural builders: landmarks, sky (dome, clouds, rainbow,
+                       skyline), Biped rig, Cat (Jack), Detective,
                        Bus, Cab, Teapot, street props (phone box, post box,
                        roadworks, Mind the Gap gantry, Royal Guard, pigeons...)
   debug/               model gallery (open the game with ?gallery)

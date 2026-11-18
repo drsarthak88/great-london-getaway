@@ -20,6 +20,15 @@ import { PowerUpEffects } from '../powerups/PowerUpEffects';
 import { PowerUpViews } from '../powerups/PowerUpViews';
 import { magnetPull } from '../powerups/Magnet';
 import type { Obstacle } from './ObstacleTypes';
+import * as THREE from 'three';
+import { Sky } from '../models/Sky';
+import { LandmarkViews } from '../entities/LandmarkViews';
+import { WeatherFx } from '../entities/WeatherFx';
+import { Weather } from './Weather';
+import { Events } from './Events';
+import { ZONES } from '../data/zones';
+import { POSTCARDS } from '../data/facts';
+import { zoneBlend, zoneEntered, zoneIndexAt } from './Zones';
 
 export type GameState = 'ready' | 'running' | 'paused' | 'caught' | 'gameover';
 
@@ -44,6 +53,13 @@ export class Game {
   readonly powers = new PowerUps();
   readonly powerEffects: PowerUpEffects;
   readonly powerViews: PowerUpViews;
+  readonly sky: Sky;
+  readonly landmarks: LandmarkViews;
+  readonly weather = new Weather();
+  readonly weatherFx: WeatherFx;
+  readonly events = new Events();
+  /** Index of the zone Jack is in. */
+  zone = 0;
 
   state: GameState = 'ready';
   /** Track distance travelled this run, in world units (1 unit ~ 1 metre). */
@@ -70,6 +86,14 @@ export class Game {
   private wasRolling = false;
   /** Seconds of full invulnerability left (helicopter landing, helmet, end of cab dash). */
   private safeTimer = 0;
+  /** Jack fell through a raised bascule on Tower Bridge. */
+  private fellIn = false;
+  private prevDistance = -1;
+  private readonly blend = { a: 0, b: 0, t: 0 };
+  private readonly cTop = new THREE.Color();
+  private readonly cBottom = new THREE.Color();
+  private readonly cFog = new THREE.Color();
+  private readonly cTmp = new THREE.Color();
   private readonly prevBox: PlayerBox = { x: 0, y: 0, d: 0, halfW: CONFIG.player.halfWidth, halfD: CONFIG.player.halfDepth, height: CONFIG.player.standHeight };
   private readonly curBox: PlayerBox = { x: 0, y: 0, d: 0, halfW: CONFIG.player.halfWidth, halfD: CONFIG.player.halfDepth, height: CONFIG.player.standHeight };
 
@@ -89,6 +113,18 @@ export class Game {
     this.powerEffects = new PowerUpEffects(this.renderer.scene, this.player, this.powers);
     this.powerViews = new PowerUpViews(this.renderer.scene, this.track.coins);
     this.powers.onEnd = this.onPowerEnd;
+    this.sky = new Sky(this.renderer.scene);
+    this.landmarks = new LandmarkViews(this.renderer.scene);
+    this.landmarks.onAppear = (id) => {
+      const card = POSTCARDS[id];
+      this.hud.showPostcard(card.title, card.facts[Math.floor(Math.random() * card.facts.length)]);
+      this.events.emit({ type: 'landmark', id });
+    };
+    this.landmarks.onPass = (id) => {
+      if (id === 'bigBen') this.events.emit({ type: 'chime' });
+    };
+    this.weatherFx = new WeatherFx(this.renderer.scene);
+    this.track.weather = this.weather;
     this.cameraRig = new CameraRig(this.renderer.camera);
     this.cameraRig.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.hud = new Hud(uiRoot, {
@@ -118,7 +154,13 @@ export class Game {
     document.getElementById('app')?.classList.remove('tea-time');
     this.endReason = null;
     this.powers.reset();
+    this.weather.reset(this.seed);
     this.track.reset(this.seed++);
+    this.landmarks.reset();
+    this.fellIn = false;
+    this.prevDistance = -1;
+    this.zone = 0;
+    this.sky.setBackdrop(ZONES[0].backdrop);
     this.track.update(0, 0, CONFIG.speed.start);
     this.obstacleViews.reset();
     this.score.reset(1);
@@ -135,6 +177,8 @@ export class Game {
     this.hud.showPaused(false);
     this.hud.showGotYou(false);
     this.hud.showGameOver(null);
+    this.hud.clearPopups();
+    this.updateEnvironment(0);
   }
 
   start(): void {
@@ -163,11 +207,20 @@ export class Game {
 
   /** Debug/test helper: jump the run ahead to `d` with fresh obstacles just in front. */
   debugSkipTo(d: number): void {
+    this.weather.reset(this.seed);
     this.track.reset(this.seed++);
+    this.landmarks.reset();
+    this.fellIn = false;
+    this.prevDistance = -1;
+    this.zone = 0;
+    this.sky.setBackdrop(ZONES[0].backdrop);
     this.track.nextD = d + 25;
     this.distance = d;
     this.runTime = (Math.min(CONFIG.speed.max, CONFIG.speed.start + d / 40) - CONFIG.speed.start) / CONFIG.speed.accel;
     this.track.update(0, d, speedAt(this.runTime));
+    this.weather.update(d);
+    this.prevDistance = d;
+    this.enterZone(zoneIndexAt(d));
   }
 
   private frame = (time: number): void => {
@@ -195,15 +248,20 @@ export class Game {
     this.obstacleViews.update(animDt, this.distance);
     this.coinViews.update(animDt, this.distance);
     this.powerViews.update(animDt, this.distance);
-    this.world.update(this.distance);
+    this.world.update(this.distance, animDt);
+    this.landmarks.update(animDt, this.distance, this.prevDistance < 0 ? this.distance : this.prevDistance);
+    this.updateEnvironment(animDt);
+    this.prevDistance = this.distance;
     const pc = this.player.controller;
     // The camera rises with flight and follows Spring/Brolly jumps more closely so
     // Jack stays in frame at the top of those big arcs.
     const camGround = pc.flying ? pc.y : pc.grounded ? pc.y : pc.groundY;
     const bigJumps = this.powers.isActive('spring') || this.powers.isActive('brolly');
     this.cameraRig.update(dt, pc.x, pc.y, this.renderer.portrait, camGround, bigJumps ? 0.55 : undefined);
-    this.hud.update(dt, this.score.total, this.score.coins, this.score.multiplier, this.distance);
+    // HUD timers (toasts, postcards) run on real time, even when frames are slow.
+    this.hud.update(Math.min(rawDt, 0.25), this.score.total, this.score.coins, this.score.multiplier, this.distance);
     this.hud.setPowers(this.powers);
+    this.sky.update(dt, this.renderer.camera);
     this.renderer.render();
   };
 
@@ -222,6 +280,9 @@ export class Game {
     this.score.addDistance(step);
     this.stats.distance = this.distance;
 
+    this.weather.update(this.distance);
+    const entered = zoneEntered(prevD, this.distance);
+    if (entered >= 0) this.enterZone(entered);
     this.track.update(dt, this.distance, this.speed);
     if (dash) this.cabSteer();
     if (c.flying) this.stats.flightTime += dt;
@@ -256,6 +317,19 @@ export class Game {
         // Black Cab Dash: invincible, and anything smashable goes flying.
         if (o.spec.smashable) this.knock(o);
         continue;
+      }
+      if (hit === 'fall') {
+        if (this.godMode || this.safeTimer > 0) continue;
+        if (this.powers.consumeShield()) {
+          this.safeTimer = CONFIG.powerups.shieldGrace;
+          this.hud.toast('Phew! The helmet saved you from a dip in the Thames!');
+          continue;
+        }
+        this.fellIn = true;
+        this.cameraRig.shake(0.6);
+        this.beginCatch('crash');
+        this.hud.toast('Splash! Into the Thames!', 2);
+        return;
       }
       if (hit === 'puddle') {
         o.hit = true;
@@ -363,6 +437,62 @@ export class Game {
     }
   };
 
+  private enterZone(index: number): void {
+    this.zone = index;
+    const z = ZONES[index];
+    this.hud.showZone(z.name);
+    this.sky.setBackdrop(z.backdrop);
+    this.events.emit({ type: 'zone', zone: z.id });
+    this.detective.chase.boost = z.detectiveBoost ? 1.7 : 1;
+    if (z.detectiveBoost) this.hud.toast('Inspector Bones knows Baker Street well: he is faster here!', 3);
+  }
+
+  /**
+   * Sky, fog and lighting for where Jack is: zone colours blend into the next zone,
+   * fog patches thicken the air (and the lanterns glow), drizzle brings rain and,
+   * once it stops, a rainbow.
+   */
+  private updateEnvironment(dt: number): void {
+    const d = this.distance;
+    zoneBlend(d, this.blend);
+    const A = ZONES[this.blend.a];
+    const B = ZONES[this.blend.b];
+    const t = this.blend.t;
+    this.cTop.setHex(A.sky[0]).lerp(this.cTmp.setHex(B.sky[0]), t);
+    this.cBottom.setHex(A.sky[1]).lerp(this.cTmp.setHex(B.sky[1]), t);
+    this.cFog.setHex(A.fog).lerp(this.cTmp.setHex(B.fog), t);
+
+    const W = CONFIG.weather;
+    const fog = this.weather.amount('fog', d);
+    const rain = this.weather.amount('drizzle', d);
+    if (fog > 0) {
+      // Pea-souper: a soft lilac fog, still bright enough to be friendly.
+      this.cTmp.setHex(0xd6cdf0);
+      this.cFog.lerp(this.cTmp, fog);
+      this.cBottom.lerp(this.cTmp, fog * 0.8);
+      this.cTop.lerp(this.cTmp.setHex(0xa9b8ef), fog * 0.6);
+    }
+    if (rain > 0) {
+      this.cTop.lerp(this.cTmp.setHex(0x7fb2e6), rain * 0.5);
+      this.cBottom.lerp(this.cTmp.setHex(0xdfeaf5), rain * 0.4);
+      this.cFog.lerp(this.cTmp.setHex(0xdfeaf5), rain * 0.4);
+    }
+    this.sky.setColors(this.cTop, this.cBottom);
+    const f = this.renderer.scene.fog as THREE.Fog;
+    f.color.copy(this.cFog);
+    (this.renderer.scene.background as THREE.Color).copy(this.cBottom);
+    f.near = CONFIG.render.fogNear + (W.fogNear - CONFIG.render.fogNear) * fog;
+    f.far = CONFIG.render.fogFar + (W.fogFar - CONFIG.render.fogFar) * fog;
+    this.world.lanternMat.emissiveIntensity = 0.7 + fog * 1.8;
+
+    // A rainbow for a while after a shower has passed.
+    const since = d - this.weather.lastDrizzleEnd;
+    const bow = since >= 0 && since < 260 ? Math.min(1, since / 40) * Math.min(1, (260 - since) / 60) : 0;
+    this.sky.setRainbow(bow);
+
+    this.weatherFx.update(dt, rain, this.renderer.camera, this.speed);
+  }
+
   private activatePower(kind: PowerKind): void {
     const c = this.player.controller;
     this.powers.activate(kind);
@@ -444,7 +574,7 @@ export class Game {
     this.speed = damp(this.speed, 0, 7, dt);
     this.distance += this.speed * dt;
     const c = this.player.controller;
-    c.groundY = groundHeight(this.track.obstacles, c.x, this.distance, c.y);
+    c.groundY = this.fellIn ? -6 : groundHeight(this.track.obstacles, c.x, this.distance, c.y);
     c.update(dt);
     this.catchTimer -= dt;
     if (this.catchTimer <= 0) this.gameOver();

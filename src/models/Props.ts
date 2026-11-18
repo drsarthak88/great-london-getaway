@@ -334,3 +334,21 @@ function tokenTexture(): THREE.Texture {
   tokenTex.colorSpace = THREE.SRGBColorSpace;
   return tokenTex;
 }
+
+/** Tower Bridge with a bascule lifted: the Thames shows through a gap in the road. */
+export function buildBridgeGap(): THREE.Group {
+  const g = new THREE.Group();
+  const s = OBSTACLES.gap;
+  const water = mesh(new THREE.PlaneGeometry(s.width, s.length - 0.4).rotateX(-Math.PI / 2), toon(0x1fb5e8, { emissive: 0x0e7fb0, emissiveIntensity: 0.35 }), 0, 0.03, 0);
+  g.add(water);
+  // Dark drop at the edges, and the two raised leaf lips with hazard stripes.
+  const drop = toon(0x1d3557);
+  for (const dir of [1, -1]) {
+    g.add(mesh(new THREE.BoxGeometry(s.width, 0.05, 0.25), drop, 0, 0.04, dir * (s.length / 2 - 0.32)));
+    const lip = mesh(new THREE.BoxGeometry(s.width, 0.12, 0.5), toonMap(stripeTexture(0xf5c518, 0x222222, 8)), 0, 0.12, dir * (s.length / 2 - 0.05));
+    lip.rotation.x = dir * 0.35;
+    lip.userData.noOutline = true;
+    g.add(lip);
+  }
+  return finish(g, false);
+}

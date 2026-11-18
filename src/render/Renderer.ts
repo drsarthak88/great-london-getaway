@@ -18,13 +18,15 @@ export class Renderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.render.maxPixelRatio));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.background = makeSkyTexture();
+    // The sky dome (models/Sky.ts) paints the background.
+    this.scene.background = new THREE.Color(CONFIG.colors.skyBottom);
     this.scene.fog = new THREE.Fog(CONFIG.colors.skyBottom, CONFIG.render.fogNear, CONFIG.render.fogFar);
 
     this.camera = new THREE.PerspectiveCamera(CONFIG.render.fov, 1, CONFIG.render.near, CONFIG.render.far);
 
-    this.scene.add(new THREE.HemisphereLight(0xfff4e0, 0x8a7f70, 1.15));
-    this.sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Bright, warm storybook lighting: a strong sky fill keeps shadows cheerful, not murky.
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0xffe2c0, 1.45));
+    this.sun = new THREE.DirectionalLight(0xfff6e0, 1.5);
     this.sun.position.set(5, 10, 4);
     this.scene.add(this.sun);
 
@@ -51,20 +53,4 @@ export class Renderer {
     this.camera.updateProjectionMatrix();
     for (const fn of this.resizeListeners) fn();
   };
-}
-
-function makeSkyTexture(): THREE.Texture {
-  const c = document.createElement('canvas');
-  c.width = 2;
-  c.height = 256;
-  const ctx = c.getContext('2d')!;
-  const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#a9d4f0');
-  grad.addColorStop(0.55, '#f3dfe6');
-  grad.addColorStop(1, '#fbe3c4');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 2, 256);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
 }
