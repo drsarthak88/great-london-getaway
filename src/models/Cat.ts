@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import { toon, toonMap } from '../render/ToonMaterials';
 import { stripeTexture } from '../render/Textures';
 import { outlineTree } from '../render/Outline';
+import { mergeRig } from '../render/Merge';
 import { createRig, type BipedRig } from './Biped';
 import { buildTeapot } from './Teapot';
 
@@ -198,6 +199,7 @@ export function buildCat(): CatRig {
   neckMount.position.y = 0.6;
   rig.torso.add(neckMount);
 
+  mergeRig(rig.root);
   outlineTree(rig.root, CONFIG.render.characterOutline);
   return { ...rig, hatMount, neckMount, teapot };
 }

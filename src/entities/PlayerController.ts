@@ -20,6 +20,8 @@ type PlayerTuning = {
  */
 export class PlayerController {
   lane: Lane = 0;
+  /** Lane before the most recent lane change (for bouncing back off a side hit). */
+  prevLane: Lane = 0;
   x = 0;
   /** Sideways velocity from the last update (for lean animation). */
   vx = 0;
@@ -58,6 +60,7 @@ export class PlayerController {
 
   reset(): void {
     this.lane = 0;
+    this.prevLane = 0;
     this.x = 0;
     this.vx = 0;
     this.y = 0;
@@ -88,9 +91,22 @@ export class PlayerController {
       this.bumpedEdge = true;
       return false;
     }
+    this.prevLane = this.lane;
     this.lane = next;
     this.justChangedLane = true;
     return true;
+  }
+
+  /** Knocked back toward the lane we came from after clipping something's side. */
+  bounceBack(): void {
+    if (this.lane !== this.prevLane) {
+      const l = this.lane;
+      this.lane = this.prevLane;
+      this.prevLane = l;
+    } else {
+      // Already in our lane: nudge back to its centre.
+      this.lane = this.prevLane;
+    }
   }
 
   /** Jump if standing (a jump cancels a roll). Returns true if a jump started. */

@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { CONFIG } from '../config';
 import { toon } from '../render/ToonMaterials';
 import { outlineTree, refreshInstancedBounds } from '../render/Outline';
+import { mergeStatic } from '../render/Merge';
 import { TrackLayout } from './TrackLayout';
 import { mulberry32 } from '../utils/random';
 
@@ -59,32 +60,34 @@ export class World {
     const dashesPerLine = Math.floor(L / 5);
     const dividers = CONFIG.lanes.count - 1;
 
+    // Road, ground, pavements, kerb lines and lane dashes are identical in every chunk:
+    // build them once and bake them into a single vertex-coloured mesh (1 draw call).
+    const base = new THREE.Group();
+    base.add(new THREE.Mesh(roadGeo, roadMat));
+    base.add(new THREE.Mesh(groundGeo, toon(CONFIG.colors.kerb)));
+    for (const side of [-1, 1]) {
+      const pave = new THREE.Mesh(paveGeo, paveMat);
+      pave.position.x = side * (ROAD_WIDTH / 2 + PAVE_W / 2);
+      base.add(pave);
+      const edge = new THREE.Mesh(edgeGeo, markMat);
+      edge.position.set(side * (ROAD_WIDTH / 2 - 0.35), 0.012, 0);
+      base.add(edge);
+    }
+    for (let d = 0; d < dividers; d++) {
+      const x = (d - (dividers - 1) / 2) * CONFIG.lanes.width;
+      for (let k = 0; k < dashesPerLine; k++) {
+        const dash = new THREE.Mesh(dashGeo, markMat);
+        dash.position.set(x, 0.01, -(k + 0.5) * (L / dashesPerLine));
+        base.add(dash);
+      }
+    }
+    mergeStatic(base);
+    const baseMesh = base.children[0] as THREE.Mesh;
+    baseMesh.geometry.computeBoundingSphere();
+
     for (let i = 0; i < chunkCount; i++) {
       const group = new THREE.Group();
-
-      group.add(new THREE.Mesh(roadGeo, roadMat));
-      group.add(new THREE.Mesh(groundGeo, toon(CONFIG.colors.kerb)));
-      for (const side of [-1, 1]) {
-        const pave = new THREE.Mesh(paveGeo, paveMat);
-        pave.position.x = side * (ROAD_WIDTH / 2 + PAVE_W / 2);
-        group.add(pave);
-        const edge = new THREE.Mesh(edgeGeo, markMat);
-        edge.position.set(side * (ROAD_WIDTH / 2 - 0.35), 0.012, 0);
-        group.add(edge);
-      }
-
-      // Lane dividers: one instanced mesh of dashes per chunk.
-      const dashes = new THREE.InstancedMesh(dashGeo, markMat, dashesPerLine * dividers);
-      let n = 0;
-      for (let d = 0; d < dividers; d++) {
-        const x = (d - (dividers - 1) / 2) * CONFIG.lanes.width;
-        for (let k = 0; k < dashesPerLine; k++) {
-          this.tmpMat.makeTranslation(x, 0.01, -(k + 0.5) * (L / dashesPerLine));
-          dashes.setMatrixAt(n++, this.tmpMat);
-        }
-      }
-      dashes.computeBoundingSphere();
-      group.add(dashes);
+      group.add(new THREE.Mesh(baseMesh.geometry, baseMesh.material));
 
       // Placeholder terraces: re-dressed on every recycle.
       const perSide = CONFIG.world.buildingsPerSide;

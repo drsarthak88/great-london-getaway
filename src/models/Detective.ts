@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import { toon, toonMap } from '../render/ToonMaterials';
 import { checkTexture } from '../render/Textures';
 import { outlineTree } from '../render/Outline';
+import { mergeRig } from '../render/Merge';
 import { createRig, type BipedRig } from './Biped';
 
 /**
@@ -153,6 +154,7 @@ export function buildDetective(): DetectiveRig {
   magnifier.add(lens);
   rig.handR.add(magnifier);
 
+  mergeRig(rig.root);
   outlineTree(rig.root, CONFIG.render.characterOutline);
   return { ...rig, magnifier };
 }

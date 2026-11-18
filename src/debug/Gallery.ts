@@ -6,6 +6,7 @@ import { buildCat, CAT_HIP_HEIGHT } from '../models/Cat';
 import { buildDetective, DETECTIVE_HIP_HEIGHT } from '../models/Detective';
 import { buildBus } from '../models/Bus';
 import { buildCab } from '../models/Cab';
+import { buildBarrier, buildGuard, buildPhoneBox, buildPigeons, buildPostBox, buildPuddle, buildRamp, buildSign } from '../models/Props';
 import { CharacterAnimator, type AnimInput } from '../entities/CharacterAnimator';
 import { CAT_STYLE, DETECTIVE_STYLE, holdMagnifier } from '../entities/Poses';
 
@@ -24,6 +25,11 @@ export function startGallery(canvas: HTMLCanvasElement, uiRoot: HTMLElement): vo
   const scene = r.scene;
   const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 48).rotateX(-Math.PI / 2), toon(0xcfc6b4));
   scene.add(ground);
+
+  if (params.get('set') === 'props') {
+    startPropsGallery(r, uiRoot);
+    return;
+  }
 
   const cat = buildCat();
   cat.root.position.set(-1.4, 0, 2);
@@ -98,6 +104,35 @@ export function startGallery(canvas: HTMLCanvasElement, uiRoot: HTMLElement): vo
       drive(cat, catAnim, dt, t);
       drive(det, detAnim, dt, t);
     }
+    r.render();
+  });
+}
+
+/** `?gallery&set=props`: every street obstacle in a row. */
+function startPropsGallery(r: Renderer, uiRoot: HTMLElement): void {
+  const items: [THREE.Object3D, number, number][] = [
+    [buildRamp(), -7.5, -3],
+    [buildPhoneBox(), -4.6, 0],
+    [buildPostBox(), -3, 0],
+    [buildBarrier(), -0.6, 0],
+    [buildSign(), 2.4, 0],
+    [buildGuard(), 4.6, 0],
+    [buildPuddle(), 0.8, 3.2],
+  ];
+  for (const [o, x, z] of items) {
+    o.position.set(x, 0, z);
+    r.scene.add(o);
+  }
+  const flock = buildPigeons();
+  flock.root.position.set(7, 0, 0);
+  r.scene.add(flock.root);
+  uiRoot.innerHTML = `<div class="hud-chip" style="position:absolute;left:12px;top:12px">Street props</div>`;
+  r.camera.position.set(0, 3.4, 11);
+  r.camera.lookAt(0, 1.2, 0);
+  let t = 0;
+  r.renderer.setAnimationLoop(() => {
+    t += 1 / 60;
+    flock.update(t, 0);
     r.render();
   });
 }

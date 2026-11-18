@@ -141,3 +141,42 @@ export function holdMagnifier(out: Pose, w: number): void {
   out[J.shRSpread] += (0.05 - out[J.shRSpread]) * w;
   out[J.elR] += (0.55 - out[J.elR]) * w;
 }
+
+/** Caught! Jack throws his paws up in surrender, knees knocking. */
+export function surrenderPose(out: Pose, t: number): void {
+  out.fill(0);
+  const wobble = Math.sin(t * 14);
+  out[J.hipsY] = -0.06;
+  out[J.torsoPitch] = 0.12;
+  out[J.headPitch] = 0.2;
+  out[J.headRoll] = 0.12 * wobble;
+  out[J.shLPitch] = 2.9;
+  out[J.shLSpread] = 0.5;
+  out[J.elL] = 0.4;
+  out[J.shRPitch] = 2.9;
+  out[J.shRSpread] = 0.5;
+  out[J.elR] = 0.4;
+  out[J.thL] = 0.25;
+  out[J.knL] = -0.45 - 0.1 * wobble;
+  out[J.thR] = 0.25;
+  out[J.knR] = -0.45 + 0.1 * wobble;
+  out[J.tailLift] = 0.1;
+  out[J.tailSway] = 0.6 * wobble;
+}
+
+/** Inspector Bones reaches forward with both hands: "Got you!" */
+export function grabPose(out: Pose, t: number): void {
+  out.fill(0);
+  out[J.torsoPitch] = -0.35;
+  out[J.headPitch] = 0.25;
+  out[J.shLPitch] = 1.55;
+  out[J.shLSpread] = 0.25;
+  out[J.elL] = 0.2;
+  out[J.shRPitch] = 2.3 + 0.15 * Math.sin(t * 9);
+  out[J.shRSpread] = 0.1;
+  out[J.elR] = 0.6;
+  out[J.thL] = 0.5;
+  out[J.knL] = -0.4;
+  out[J.thR] = -0.3;
+  out[J.knR] = -0.3;
+}

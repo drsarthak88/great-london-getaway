@@ -76,3 +76,11 @@ export function toonMap(map: THREE.Texture, opts: ToonOptions & { color?: number
   }
   return mat;
 }
+
+let vcMat: THREE.MeshToonMaterial | null = null;
+
+/** Shared toon material whose colour comes from per-vertex colours (for merged meshes). */
+export function toonVertexColors(): THREE.MeshToonMaterial {
+  if (!vcMat) vcMat = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: getToonGradient() });
+  return vcMat;
+}

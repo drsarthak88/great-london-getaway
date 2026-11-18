@@ -1,8 +1,8 @@
 import { makePose, type Pose } from '../models/Biped';
-import { blendPoses, fallPose, idlePose, jumpPose, rollPose, runPose, type PoseStyle } from './Poses';
+import { blendPoses, fallPose, idlePose, jumpPose, rollPose, runPose, surrenderPose, type PoseStyle } from './Poses';
 import { clamp, damp } from '../utils/math';
 
-export type AnimMode = 'idle' | 'run' | 'air' | 'roll';
+export type AnimMode = 'idle' | 'run' | 'air' | 'roll' | 'caught';
 
 export interface AnimInput {
   /** False while waiting on the title/ready screen. */
@@ -15,10 +15,13 @@ export interface AnimInput {
   vy: number;
   /** Forward speed, drives the run cycle rate. */
   speed: number;
+  /** The catch scene is playing. */
+  caught?: boolean;
 }
 
 /** Which key pose should dominate for a given movement state. */
-export function selectMode(s: Pick<AnimInput, 'running' | 'grounded' | 'rolling'>): AnimMode {
+export function selectMode(s: Pick<AnimInput, 'running' | 'grounded' | 'rolling' | 'caught'>): AnimMode {
+  if (s.caught) return 'caught';
   if (s.rolling) return 'roll';
   if (!s.grounded) return 'air';
   return s.running ? 'run' : 'idle';
@@ -29,8 +32,8 @@ export function strideRate(speed: number): number {
   return 6 + speed * 0.35;
 }
 
-const MODES: AnimMode[] = ['idle', 'run', 'air', 'roll'];
-const BLEND_RATE: Record<AnimMode, number> = { idle: 8, run: 12, air: 16, roll: 22 };
+const MODES: AnimMode[] = ['idle', 'run', 'air', 'roll', 'caught'];
+const BLEND_RATE: Record<AnimMode, number> = { idle: 8, run: 12, air: 16, roll: 22, caught: 10 };
 
 /**
  * Blends procedural key poses with smoothed weights so transitions (take-off, landing,
@@ -44,18 +47,20 @@ export class CharacterAnimator {
   time = 0;
   mode: AnimMode = 'idle';
 
-  private readonly poses: Pose[] = [makePose(), makePose(), makePose(), makePose()];
+  private readonly poses: Pose[] = [makePose(), makePose(), makePose(), makePose(), makePose()];
   private readonly jumpTmp = makePose();
   private readonly fallTmp = makePose();
-  private readonly weights = new Float32Array([1, 0, 0, 0]);
+  private readonly weights = new Float32Array([1, 0, 0, 0, 0]);
 
   constructor(
     private readonly style: PoseStyle,
     private readonly hipHeight: number,
+    /** Pose for the catch scene (Jack surrenders; Bones grabs). */
+    private readonly caughtPose: (out: Pose, t: number) => void = surrenderPose,
   ) {}
 
   reset(): void {
-    this.weights.set([1, 0, 0, 0]);
+    this.weights.set([1, 0, 0, 0, 0]);
     this.phase = 0;
     this.spin = 0;
     this.mode = 'idle';
@@ -77,6 +82,7 @@ export class CharacterAnimator {
     const f = clamp(0.5 - s.vy * 0.08, 0, 1);
     for (let i = 0; i < air.length; i++) air[i] = this.jumpTmp[i] + (this.fallTmp[i] - this.jumpTmp[i]) * f;
     rollPose(roll, this.hipHeight);
+    this.caughtPose(this.poses[4], this.time);
 
     const rate = BLEND_RATE[this.mode];
     let sum = 0;

@@ -91,7 +91,10 @@ export function refreshInstancedBounds(mesh: THREE.InstancedMesh): void {
 export function outlineTree(root: THREE.Object3D, thickness?: number): void {
   const targets: THREE.Mesh[] = [];
   root.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh && o.name !== 'outline' && !o.userData.noOutline) targets.push(o as THREE.Mesh);
+    if (!(o as THREE.Mesh).isMesh || o.name === 'outline' || o.userData.noOutline) return;
+    // Already outlined (e.g. a sub-model that outlined itself): don't double up.
+    if (o.children.some((c) => c.name === 'outline')) return;
+    targets.push(o as THREE.Mesh);
   });
   for (const m of targets) addOutline(m, thickness);
 }

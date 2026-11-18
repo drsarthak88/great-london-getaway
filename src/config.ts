@@ -88,6 +88,62 @@ export const CONFIG = {
     hideGap: 11,
   },
 
+  obstacles: {
+    /** Patterns are spawned until this far ahead of the player. */
+    spawnAhead: 150,
+    /** Track distance where the first pattern starts (a clear runway before it). */
+    firstAt: 45,
+    /** Minimum clear road between patterns, and extra per unit of speed. */
+    gapBase: 7,
+    gapPerSpeed: 0.55,
+    /** Obstacles this far behind the player are recycled. */
+    recycleBehind: 20,
+    /** Speed of oncoming buses and cabs (track units per second). */
+    oncomingBusSpeed: 8,
+    oncomingCabSpeed: 10,
+    /** Player feet within this of a surface's top count as "on it" (step-up allowance). */
+    stepUp: 0.55,
+    /** Distance per difficulty level (more and harder patterns unlock). */
+    levelEvery: 450,
+    maxLevel: 4,
+  },
+
+  coins: {
+    /** Floating height of coins above the surface they sit on. */
+    hover: 0.65,
+    spacing: 2.3,
+    /** Chance each spawned coin is a gold sovereign instead of a penny. */
+    sovereignChance: 0.03,
+    pennyValue: 1,
+    sovereignValue: 10,
+    /** A Teapot Token appears somewhere in each stretch of this many units. */
+    tokenEvery: [650, 1100] as const,
+    /** Pickup reach around the player. */
+    reachX: 0.85,
+    reachD: 1.0,
+    spin: 3.2,
+  },
+
+  score: {
+    /** Points per unit of distance, before the multiplier. */
+    perMetre: 1,
+    /** Points per coin value, before the multiplier. */
+    perCoin: 5,
+  },
+
+  stumble: {
+    /** A second stumble within this many seconds of the first gets you caught. */
+    window: 10,
+    /** Grace period after a stumble during which further hits are ignored. */
+    grace: 0.9,
+    /** Puddles slow you to this fraction of speed... */
+    puddleSlow: 0.72,
+    /** ...for this long. */
+    puddleTime: 1.2,
+    /** Length of the "Got you!" catch scene before Game Over. */
+    catchTime: 2.0,
+  },
+
   world: {
     /** Length of one recycled track chunk. */
     chunkLength: 40,

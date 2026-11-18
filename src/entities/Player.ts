@@ -24,6 +24,13 @@ export class Player {
   private squash = 1;
   private lean = 0;
   private turn = 0;
+  /** Seconds of stumble wobble left. */
+  private flinchTimer = 0;
+  /** Seconds of invulnerability blink left. */
+  private blinkTimer = 0;
+  /** Knock-back after a crash (pushed toward the camera). */
+  private knockZ = 0;
+  private time = 0;
 
   constructor(scene: THREE.Scene) {
     this.rig = buildCat();
@@ -39,13 +46,32 @@ export class Player {
     this.squash = 1;
     this.lean = 0;
     this.turn = 0;
+    this.flinchTimer = 0;
+    this.blinkTimer = 0;
+    this.knockZ = 0;
+    this.rig.root.visible = true;
     this.sync(0, 0, false);
   }
 
+  /** Clipped something: a quick wobble and a short invulnerability blink. */
+  flinch(grace: number): void {
+    this.flinchTimer = 0.45;
+    this.blinkTimer = grace;
+    this.squash = 0.8;
+  }
+
+  /** Ran smack into something: squash flat against it and bounce back a little. */
+  bonk(): void {
+    this.squash = 0.6;
+    this.knockZ = 0.9;
+  }
+
   /** Copy controller state onto the model and animate. `running` is false on the title screen. */
-  sync(dt: number, speed: number, running: boolean): void {
+  sync(dt: number, speed: number, running: boolean, caught = false): void {
     const c = this.controller;
-    this.root.position.set(c.x, c.y, 0);
+    this.time += dt;
+    this.knockZ = damp(this.knockZ, caught ? 0.45 : 0, 5, dt);
+    this.root.position.set(c.x, c.y, this.knockZ);
 
     const pose = this.animator.update(dt, {
       running,
@@ -54,6 +80,7 @@ export class Player {
       rollProgress: 1 - c.rollTimer / CONFIG.player.rollDuration,
       vy: c.vy,
       speed,
+      caught,
     });
     applyPose(this.rig, pose);
     this.rig.hips.rotation.x = this.animator.spin;
@@ -68,7 +95,17 @@ export class Player {
     // Lean and glance into lane changes.
     this.lean = damp(this.lean, -c.vx * 0.022, 14, dt);
     this.turn = damp(this.turn, -c.vx * 0.03, 12, dt);
-    this.body.rotation.set(0, this.turn, this.lean);
+    let wobble = 0;
+    if (this.flinchTimer > 0) {
+      this.flinchTimer = Math.max(0, this.flinchTimer - dt);
+      wobble = Math.sin(this.time * 45) * 0.3 * (this.flinchTimer / 0.45);
+    }
+    this.body.rotation.set(0, this.turn, this.lean + wobble);
+
+    if (this.blinkTimer > 0) {
+      this.blinkTimer = Math.max(0, this.blinkTimer - dt);
+      this.rig.root.visible = this.blinkTimer === 0 || Math.floor(this.time * 14) % 2 === 0;
+    }
 
     this.shadow.update(c.x, c.groundY, c.y, 0);
   }
