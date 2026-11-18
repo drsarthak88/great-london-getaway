@@ -11,18 +11,33 @@ import { CONFIG } from '../config';
 
 const materials = new Map<number, THREE.ShaderMaterial>();
 
+/**
+ * World size of one screen pixel per unit of view distance. Outlines never get thinner
+ * than this, so distant ones don't break up into dotted dashes. Updated on resize.
+ */
+const minPixel = { value: 0.0012 };
+
+export function setOutlinePixelSize(fovDegrees: number, drawingBufferHeight: number): void {
+  minPixel.value = (2 * Math.tan((fovDegrees * Math.PI) / 360)) / Math.max(1, drawingBufferHeight);
+}
+
 export function getOutlineMaterial(thickness: number = CONFIG.render.outlineThickness): THREE.ShaderMaterial {
   let mat = materials.get(thickness);
   if (!mat) {
     mat = new THREE.ShaderMaterial({
-      uniforms: {
-        uThickness: { value: thickness },
-        uColor: { value: new THREE.Color(CONFIG.colors.ink) },
-      },
+      uniforms: THREE.UniformsUtils.merge([
+        THREE.UniformsLib.fog,
+        {
+          uThickness: { value: thickness },
+          uColor: { value: new THREE.Color(CONFIG.colors.ink) },
+        },
+      ]),
       vertexShader: /* glsl */ `
         uniform float uThickness;
+        uniform float uMinPixel;
         #include <common>
         #include <skinning_pars_vertex>
+        #include <fog_pars_vertex>
         void main() {
           #include <beginnormal_vertex>
           #include <skinbase_vertex>
@@ -35,19 +50,31 @@ export function getOutlineMaterial(thickness: number = CONFIG.render.outlineThic
           #ifdef USE_INSTANCING
             scale *= vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
           #endif
-          transformed += n * uThickness / max(scale, vec3(1e-4));
+          // Keep the line at least ~1.3 screen pixels wide however far away it is.
+          vec4 viewPos = modelViewMatrix * vec4(transformed, 1.0);
+          #ifdef USE_INSTANCING
+            viewPos = modelViewMatrix * instanceMatrix * vec4(transformed, 1.0);
+          #endif
+          float width = max(uThickness, -viewPos.z * uMinPixel * 1.3);
+          transformed += n * width / max(scale, vec3(1e-4));
           #include <project_vertex>
+          #include <fog_vertex>
         }
       `,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
+        #include <fog_pars_fragment>
         void main() {
           gl_FragColor = vec4(uColor, 1.0);
           #include <colorspace_fragment>
+          // Ink fades into fog and distance like everything else.
+          #include <fog_fragment>
         }
       `,
       side: THREE.BackSide,
+      fog: true,
     });
+    mat.uniforms.uMinPixel = minPixel;
     materials.set(thickness, mat);
   }
   return mat;

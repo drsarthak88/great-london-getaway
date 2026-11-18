@@ -193,6 +193,8 @@ export class Hud {
   /** Show or hide the in-run HUD (hidden on the title screen and Case File). */
   setVisible(show: boolean): void {
     this.el.classList.toggle('hud-hidden', !show);
+    // A fresh run always gets its pause button back (the catch scene hides it).
+    if (show) this.pauseBtn.hidden = false;
   }
 
   /**
@@ -215,7 +217,7 @@ export class Hud {
 
   showGotYou(show: boolean): void {
     this.gotYou.hidden = !show;
-    if (show) this.pauseBtn.hidden = true;
+    this.pauseBtn.hidden = show;
   }
 
 
