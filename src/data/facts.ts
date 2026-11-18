@@ -124,3 +124,15 @@ export const GENERAL_FACTS: string[] = [
   'The Foot Guards\' tall bearskin hats are about 45 centimetres high.',
   'The London Underground is often called "the Tube".',
 ];
+
+/** Every fact in a fixed order, for the Case File's "one new fact" rotation. */
+export const ALL_FACTS: string[] = [...GENERAL_FACTS, ...Object.values(POSTCARDS).flatMap((c) => c.facts)];
+
+/** The n-th fact in the rotation (wraps around). */
+export function pickFact(n: number): string {
+  // Step through with a stride coprime to the length so consecutive facts vary by topic.
+  const len = ALL_FACTS.length;
+  let stride = 7;
+  while (len % stride === 0) stride++;
+  return ALL_FACTS[(n * stride) % len];
+}

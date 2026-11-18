@@ -1,7 +1,7 @@
 import { POWER_KINDS, POWER_NAMES, type PowerKind, type PowerUps } from '../powerups/PowerUps';
 
 /** Tiny inline icons for the power-up timer rings (drawn in a 24x24 box). */
-const POWER_ICONS: Record<PowerKind, string> = {
+export const POWER_ICONS: Record<PowerKind, string> = {
   helicopter: '<path d="M3 6h18M12 6v5" stroke-width="2.4"/><circle cx="12" cy="15" r="4" fill="currentColor" stroke="none"/>',
   spring: '<path d="M6 5h12M6 9h12M6 13h12M6 17h12M18 5l-12 4M18 9l-12 4M18 13l-12 4" stroke-width="1.8"/>',
   brolly: '<path d="M3 12a9 8 0 0 1 18 0zM12 12v7a2 2 0 0 1-4 0" stroke-width="2"/>',
@@ -13,15 +13,6 @@ const POWER_ICONS: Record<PowerKind, string> = {
 };
 const RING_LEN = 2 * Math.PI * 21;
 
-export interface RunSummary {
-  score: number;
-  best: number;
-  coins: number;
-  distance: number;
-  tokens: number;
-  newBest: boolean;
-}
-
 /**
  * In-run HUD and simple overlays (Phase 7 replaces the start and game-over cards with
  * the full storybook UI). DOM text is only touched when the shown value changes.
@@ -32,14 +23,13 @@ export class Hud {
   private readonly coinsEl: HTMLElement;
   private readonly multEl: HTMLElement;
   private readonly distanceEl: HTMLElement;
-  private readonly prompt: HTMLElement;
-  private readonly pauseCard: HTMLElement;
   private readonly pauseBtn: HTMLButtonElement;
+  private readonly meterFill: HTMLElement;
+  private readonly meter: HTMLElement;
+  private shownGap = -1;
+  private shownDanger = false;
   private readonly toastEl: HTMLElement;
   private readonly gotYou: HTMLElement;
-  private readonly overCard: HTMLElement;
-  private readonly overBody: HTMLElement;
-  private readonly topBar: HTMLElement;
   private shown = { score: -1, coins: -1, mult: -1, distance: -1 };
   private readonly powerEls = new Map<PowerKind, { el: HTMLElement; ring: SVGCircleElement; shown: number }>();
   private toastTimer = 0;
@@ -49,7 +39,7 @@ export class Hud {
   private cardTimer = 0;
   private readonly cardQueue: { title: string; fact: string }[] = [];
 
-  constructor(root: HTMLElement, handlers: { onPause: () => void; onResume: () => void; onRestart: () => void }) {
+  constructor(root: HTMLElement, onPause: () => void) {
     this.el = document.createElement('div');
     this.el.className = 'hud';
     this.el.innerHTML = `
@@ -57,6 +47,10 @@ export class Hud {
         <div class="hud-left">
           <div class="hud-chip hud-score-chip"><span class="hud-score">0</span><span class="hud-mult" title="Score multiplier">&times;1</span></div>
           <div class="hud-sub"><span class="hud-distance">0</span> m</div>
+        </div>
+        <div class="hud-meter" title="How close Inspector Bones is" role="img" aria-label="Inspector Bones distance">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5" fill="#bfe6f5" stroke="currentColor" stroke-width="2.5"/><path d="M15 15l6 6" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>
+          <div class="hud-meter-track"><div class="hud-meter-fill"></div></div>
         </div>
         <div class="hud-right">
           <div class="hud-chip hud-coins-chip"><span class="hud-penny" aria-hidden="true"></span><span class="hud-coins">0</span></div>
@@ -84,20 +78,6 @@ export class Hud {
         <p class="hud-postcard-fact"></p>
       </aside>
       <div class="hud-gotyou" hidden>Got you!</div>
-      <div class="hud-prompt">
-        <h1>The Great London Getaway</h1>
-        <p class="hud-tap">Tap or press Space to run!</p>
-        <p class="hud-help">Swipe or use arrow keys / WASD &middot; Up or Space to jump &middot; Down to roll</p>
-      </div>
-      <div class="hud-card hud-pausecard" hidden>
-        <h2>Paused</h2>
-        <button class="btn" type="button" data-act="resume">Carry on</button>
-      </div>
-      <div class="hud-card hud-overcard" hidden>
-        <h2>Caught!</h2>
-        <div class="hud-over-body"></div>
-        <button class="btn" type="button" data-act="restart">Run again</button>
-      </div>
     `;
     root.appendChild(this.el);
     const q = <T extends HTMLElement>(sel: string) => this.el.querySelector(sel) as T;
@@ -105,23 +85,18 @@ export class Hud {
     this.coinsEl = q('.hud-coins');
     this.multEl = q('.hud-mult');
     this.distanceEl = q('.hud-distance');
-    this.prompt = q('.hud-prompt');
-    this.pauseCard = q('.hud-pausecard');
     this.pauseBtn = q('.hud-pause');
+    this.meter = q('.hud-meter');
+    this.meterFill = q('.hud-meter-fill');
     this.toastEl = q('.hud-toast');
     this.gotYou = q('.hud-gotyou');
-    this.overCard = q('.hud-overcard');
-    this.overBody = q('.hud-over-body');
-    this.topBar = q('.hud-top');
     this.zoneEl = q('.hud-zone');
     this.cardEl = q('.hud-postcard');
     for (const k of POWER_KINDS) {
       const el = q<HTMLElement>(`[data-power="${k}"]`);
       this.powerEls.set(k, { el, ring: el.querySelector('.hud-power-ring') as SVGCircleElement, shown: -1 });
     }
-    this.pauseBtn.addEventListener('click', handlers.onPause);
-    q('[data-act="resume"]').addEventListener('click', handlers.onResume);
-    q('[data-act="restart"]').addEventListener('click', handlers.onRestart);
+    this.pauseBtn.addEventListener('click', onPause);
   }
 
   update(dt: number, score: number, coins: number, multiplier: number, distance: number): void {
@@ -205,14 +180,27 @@ export class Hud {
     this.toastTimer = seconds;
   }
 
-  showPrompt(show: boolean): void {
-    this.prompt.hidden = !show;
-    this.pauseBtn.hidden = show;
-    this.topBar.classList.toggle('hud-dim', show);
+  /** Show or hide the in-run HUD (hidden on the title screen and Case File). */
+  setVisible(show: boolean): void {
+    this.el.classList.toggle('hud-hidden', !show);
   }
 
-  showPaused(show: boolean): void {
-    this.pauseCard.hidden = !show;
+  /**
+   * Detective meter: fills as Inspector Bones closes in; glows red while a second
+   * stumble would get Jack caught.
+   */
+  setChase(gap: number, danger: boolean): void {
+    const far = 16;
+    const close = 2.9;
+    const f = Math.round(Math.max(0, Math.min(1, (far - gap) / (far - close))) * 50) / 50;
+    if (f !== this.shownGap) {
+      this.shownGap = f;
+      this.meterFill.style.transform = `scaleX(${f})`;
+    }
+    if (danger !== this.shownDanger) {
+      this.shownDanger = danger;
+      this.meter.classList.toggle('hud-meter-danger', danger);
+    }
   }
 
   showGotYou(show: boolean): void {
@@ -220,17 +208,5 @@ export class Hud {
     if (show) this.pauseBtn.hidden = true;
   }
 
-  showGameOver(summary: RunSummary | null): void {
-    this.overCard.hidden = !summary;
-    if (!summary) return;
-    this.toastEl.hidden = true;
-    this.overBody.innerHTML = `
-      <dl class="hud-stats">
-        <dt>Score</dt><dd>${summary.score}${summary.newBest ? ' <span class="hud-best">New best!</span>' : ''}</dd>
-        <dt>Best</dt><dd>${summary.best}</dd>
-        <dt>Coins</dt><dd>${summary.coins}</dd>
-        <dt>Distance</dt><dd>${summary.distance} m</dd>
-        <dt>Teapot Tokens</dt><dd>${summary.tokens}</dd>
-      </dl>`;
-  }
+
 }

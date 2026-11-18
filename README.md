@@ -64,6 +64,44 @@ pops up with a true fact the first time each landmark appears.
 **Weather:** fog patches (a soft lilac pea-souper where the lanterns glow) and
 drizzle showers (rain and extra puddles), followed by a rainbow.
 
+## Menus and progress
+- **Storybook intro:** four illustrated pages on first launch (skippable, replay from Settings).
+- **Title screen:** an open storybook with Play, Shop, Missions and Settings.
+- **Missions:** sets of three. Finish a set to raise your score multiplier for good.
+- **Shop:**
+  - **Wardrobe:** flat cap, bowler hat, Union Jack scarf, pearly king jacket.
+  - **Upgrades:** each power-up lasts longer with every level.
+- **Second chance:** when caught, spend a Teapot Token to escape (once per run).
+- **Case File:** your score, best, coins, mission progress, a "Did you know?" fact and a
+  Share button (uses the phone's share sheet, or copies the message).
+- **Settings:** music and sound volume, reduced motion, colour-blind friendly UI.
+- Progress saves automatically on the device.
+
+## Phones, tablets and desktop
+The game runs in any modern browser. Touch controls (swipe), notch-safe layout and
+menus that scale with the screen make it comfortable on phones, iPads/tablets and
+desktops, in portrait or landscape. It can be added to the home screen to run full
+screen (web app manifest included).
+
+Loading is light: an instant HTML splash, no images or 3D model files (everything is
+drawn in code), and about 200 KB of gzipped JavaScript, with Three.js in its own
+long-cached chunk.
+
+## Ready for future updates
+The code is arranged so these can be added later without rewrites:
+- **Accounts and cloud saves:** all saving goes through `services/Storage.ts`
+  (`KeyValueStore`). Swap `LocalStore` for a cloud-backed store. The save format is
+  versioned and migrated (`profile/Profile.ts`), so old saves upgrade cleanly.
+- **Online scores and friends:** `services/Leaderboard.ts` defines a `Leaderboard`
+  interface. Today it's a local top 10; an online version can implement the same interface.
+- **Sharing:** `services/Share.ts` (Web Share API with a copy fallback).
+- **Costume packs, including paid ones:** wardrobe items and packs are data in
+  `data/wardrobe.ts`. Items can belong to a `pack`, and the shop already shows packs
+  as "Coming soon". Ownership is a list in the profile, ready for purchases or entitlements.
+- **Android and iOS apps:** the game is a self-contained web app, so it can be wrapped
+  with a tool such as Capacitor. Storage would switch to native preferences behind the same
+  interface.
+
 ## Run locally
 Requires Node.js 20 or newer.
 
@@ -124,7 +162,9 @@ src/
   render/              renderer, toon materials, outlines, canvas textures,
                        static mesh merging
   powerups/            PowerUps timers (pure), magnet pull, effects and pickups
-  ui/                  HTML/CSS overlays (HUD, power-up timer rings)
+  profile/             versioned save data, shop rules, multiplier
+  services/            storage, leaderboard and sharing (swappable backends)
+  ui/                  HUD (detective meter, power-up rings), menus (App), SVG art
   utils/               small pure helpers (math, seeded random)
 tests/                 Vitest unit tests for pure logic
 ```

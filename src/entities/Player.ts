@@ -7,6 +7,8 @@ import { applyPose } from '../models/Biped';
 import { buildCat, CAT_HIP_HEIGHT, type CatRig } from '../models/Cat';
 import { BlobShadow } from './BlobShadow';
 import { damp } from '../utils/math';
+import { buildBowler, buildFlatCap, buildPearlyJacket, buildUnionScarf } from '../models/Outfits';
+import type { OutfitSlot } from '../data/wardrobe';
 
 /**
  * Marmalade Jack on screen: the procedural cat rig driven by PlayerController state.
@@ -31,6 +33,12 @@ export class Player {
   /** Knock-back after a crash (pushed toward the camera). */
   private knockZ = 0;
   private time = 0;
+  /** Wardrobe items by id, built on first use. */
+  private readonly outfits = new Map<string, THREE.Object3D>();
+  private scarfTails: THREE.Group | null = null;
+  /** Shop display: Jack turns to face the camera. */
+  showcase = false;
+  private showTurn = 0;
 
   constructor(scene: THREE.Scene) {
     this.rig = buildCat();
@@ -51,6 +59,46 @@ export class Player {
     this.knockZ = 0;
     this.rig.root.visible = true;
     this.sync(0, 0, false);
+  }
+
+  /** Dress Jack in the equipped wardrobe items (null slots are bare). */
+  setOutfit(equipped: Record<OutfitSlot, string | null>): void {
+    for (const o of this.outfits.values()) o.visible = false;
+    for (const id of Object.values(equipped)) {
+      if (!id) continue;
+      this.outfitObject(id).visible = true;
+    }
+  }
+
+  private outfitObject(id: string): THREE.Object3D {
+    let o = this.outfits.get(id);
+    if (o) return o;
+    switch (id) {
+      case 'flatCap':
+        o = buildFlatCap();
+        this.rig.hatMount.add(o);
+        break;
+      case 'bowler':
+        o = buildBowler();
+        this.rig.hatMount.add(o);
+        break;
+      case 'unionScarf': {
+        const s = buildUnionScarf();
+        o = s.root;
+        this.scarfTails = s.tails;
+        this.rig.neckMount.add(o);
+        o.position.y = -0.04;
+        break;
+      }
+      case 'pearlyJacket':
+        o = buildPearlyJacket();
+        this.rig.torso.add(o);
+        break;
+      default:
+        o = new THREE.Group();
+    }
+    this.outfits.set(id, o);
+    return o;
   }
 
   /** Clipped something: a quick wobble and a short invulnerability blink. */
@@ -100,7 +148,10 @@ export class Player {
       this.flinchTimer = Math.max(0, this.flinchTimer - dt);
       wobble = Math.sin(this.time * 45) * 0.3 * (this.flinchTimer / 0.45);
     }
-    this.body.rotation.set(0, this.turn, this.lean + wobble);
+    // In the shop Jack turns round to show off his outfit.
+    this.showTurn = damp(this.showTurn, this.showcase ? Math.PI + Math.sin(this.time * 0.8) * 0.5 : 0, 5, dt);
+    this.body.rotation.set(0, this.turn + this.showTurn, this.lean + wobble);
+    if (this.scarfTails) this.scarfTails.rotation.x = 0.9 + Math.sin(this.time * 14) * 0.25 * (running ? 1 : 0.3);
 
     if (this.blinkTimer > 0) {
       this.blinkTimer = Math.max(0, this.blinkTimer - dt);

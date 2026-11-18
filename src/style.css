@@ -351,3 +351,25 @@ html, body {
   @keyframes hud-card-in { from { transform: translateX(50%) translateY(140%); } }
 }
 @media (prefers-reduced-motion: reduce) { .hud-zone-in, .hud-postcard { animation: none; } }
+
+/* ---------- Detective distance meter ---------- */
+.hud-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  padding: 3px 10px 3px 5px;
+  box-shadow: 2px 2px 0 var(--ink);
+  color: var(--ink);
+}
+.hud-meter svg { width: 24px; height: 24px; }
+.hud-meter-track { width: clamp(60px, 16vw, 140px); height: 10px; border: 2px solid var(--ink); border-radius: 999px; background: #e6f7e9; overflow: hidden; }
+.hud-meter-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ffc93c, #ff6b3d); transform-origin: left center; transform: scaleX(0); transition: transform 0.2s; }
+.hud-meter-danger .hud-meter-fill { background: #e63946; animation: hud-blink 0.5s steps(2) infinite; }
+@media (max-width: 420px) {
+  .hud-meter { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); }
+  .hud-zone { top: calc(104px + var(--safe-top)); }
+}
