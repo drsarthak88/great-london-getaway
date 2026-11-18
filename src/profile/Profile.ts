@@ -17,6 +17,8 @@ export interface Settings {
   sfx: number;
   reducedMotion: boolean;
   colourBlind: boolean;
+  /** Short buzzes on crashes and stumbles (phones that support it). */
+  vibration: boolean;
 }
 
 export interface MissionState {
@@ -43,6 +45,8 @@ export interface Profile {
   totals: { runs: number; distance: number; coins: number };
   /** Rotates through facts so the Case File shows a new one each time. */
   factIndex: number;
+  /** First-run hints already shown ("jump", "roll", "dodge", ...). */
+  hints: string[];
 }
 
 export function defaultProfile(): Profile {
@@ -56,11 +60,12 @@ export function defaultProfile(): Profile {
     owned: [],
     equipped: { head: null, neck: null, body: null },
     upgrades: {},
-    settings: { music: 0.7, sfx: 0.8, reducedMotion: reduce, colourBlind: false },
+    settings: { music: 0.7, sfx: 0.8, reducedMotion: reduce, colourBlind: false, vibration: true },
     missions: { setIndex: 0, totals: {}, done: [] },
     introSeen: false,
     totals: { runs: 0, distance: 0, coins: 0 },
     factIndex: 0,
+    hints: [],
   };
 }
 
@@ -101,6 +106,7 @@ export function migrate(raw: unknown): Profile {
       sfx: num(s.sfx, p.settings.sfx, 0, 1),
       reducedMotion: bool(s.reducedMotion, p.settings.reducedMotion),
       colourBlind: bool(s.colourBlind, false),
+      vibration: bool(s.vibration, true),
     };
   }
   if (r.missions && typeof r.missions === 'object') {
@@ -115,6 +121,7 @@ export function migrate(raw: unknown): Profile {
     p.totals = { runs: num(r.totals.runs, 0), distance: num(r.totals.distance, 0), coins: num(r.totals.coins, 0) };
   }
   p.factIndex = Math.floor(num(r.factIndex, 0));
+  if (Array.isArray(r.hints)) p.hints = r.hints.filter((h: unknown) => typeof h === 'string');
   return p;
 }
 

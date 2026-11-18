@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PATTERNS, type Pattern } from '../src/data/patterns';
 import { OBSTACLES, passMove } from '../src/game/ObstacleTypes';
+import { CONFIG } from '../src/config';
 
 /**
  * Is there a route through the pattern? Walk forward in small steps; in each lane a
@@ -76,6 +77,18 @@ describe('obstacle patterns', () => {
       expect(solvable(p)).toBe(true);
     });
   }
+
+  it('never asks for two jumps in one lane closer than a top-speed jump is long', () => {
+    // Airtime x top speed: closer than this, there are speeds where Jack is still in the
+    // air from the first jump when he must jump the second, yet can't clear both at once.
+    const longest = CONFIG.player.jumpDuration * CONFIG.speed.max + 1;
+    for (const p of PATTERNS) {
+      for (let slot = 0; slot < 3; slot++) {
+        const jumps = p.items.filter((i) => i.slot === slot && passMove(i.kind) === 'jump' && !i.oncoming).map((i) => i.at).sort((a, b) => a - b);
+        for (let k = 1; k < jumps.length; k++) expect(jumps[k] - jumps[k - 1], `${p.id} slot ${slot}`).toBeGreaterThanOrEqual(longest);
+      }
+    }
+  });
 
   it('the solver does catch an impossible wall', () => {
     const wall: Pattern = {

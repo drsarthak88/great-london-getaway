@@ -184,19 +184,20 @@ export const PATTERNS: Pattern[] = [
     coins: [{ slot: 0, at: -0.1, count: 4, arc: 1.6 }],
   },
   {
+    // Two barriers in one lane, far enough apart to jump each separately at any speed.
     id: 'roadworks',
-    length: 14,
+    length: 30,
     minLevel: 2,
     weight: 2,
     items: [
-      { kind: 'barrier', slot: 0, at: 2 },
-      { kind: 'barrier', slot: 0, at: 11 },
-      { kind: 'sign', slot: 1, at: 6 },
-      { kind: 'phoneBox', slot: 2, at: 6 },
+      { kind: 'barrier', slot: 0, at: 1 },
+      { kind: 'barrier', slot: 0, at: 26 },
+      { kind: 'sign', slot: 1, at: 13 },
+      { kind: 'phoneBox', slot: 2, at: 13 },
     ],
     coins: [
-      { slot: 0, at: -1.25, count: 4, arc: 1.7 },
-      { slot: 0, at: 7.75, count: 4, arc: 1.7 },
+      { slot: 0, at: -2.25, count: 4, arc: 1.7 },
+      { slot: 0, at: 22.75, count: 4, arc: 1.7 },
     ],
   },
   {

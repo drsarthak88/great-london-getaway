@@ -257,6 +257,9 @@ export class App {
       case 'colourBlind':
         s.colourBlind = el.checked;
         break;
+      case 'vibration':
+        s.vibration = el.checked;
+        break;
       default:
         return;
     }
@@ -463,6 +466,7 @@ export class App {
         <label class="setting"><span>Sound effects</span><input type="range" name="sfx" min="0" max="100" value="${Math.round(s.sfx * 100)}"/></label>
         <label class="setting setting-toggle"><span>Reduced motion<em>No screen shake or bouncy menus</em></span><input type="checkbox" name="reducedMotion" ${s.reducedMotion ? 'checked' : ''}/></label>
         <label class="setting setting-toggle"><span>Colour-blind friendly<em>Clearer colours and labels</em></span><input type="checkbox" name="colourBlind" ${s.colourBlind ? 'checked' : ''}/></label>
+        ${'vibrate' in navigator ? `<label class="setting setting-toggle"><span>Vibration<em>A little buzz when Jack bumps into things</em></span><input type="checkbox" name="vibration" ${s.vibration ? 'checked' : ''}/></label>` : ''}
         <div class="setting-row">
           <button class="btn btn-small" data-act="story">Read the story again</button>
           ${this.game.state === 'paused' ? '' : '<button class="btn btn-small btn-danger" data-act="reset">Start over</button>'}

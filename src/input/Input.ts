@@ -27,6 +27,8 @@ export class Input {
   private readonly queue: Action[] = [];
   private readonly swipe: SwipeDetector;
   private pointerId: number | null = null;
+  /** True after a touch, false after a key press: lets hints show swipes or keys. */
+  usingTouch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
 
   constructor(private readonly target: HTMLElement) {
     this.swipe = new SwipeDetector(CONFIG.input.swipeMinPx, CONFIG.input.tapMaxMs);
@@ -67,6 +69,7 @@ export class Input {
     // Don't steal keys from form controls in menus.
     const el = e.target as HTMLElement | null;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) return;
+    this.usingTouch = false;
     const action = KEYMAP[e.code];
     if (!action) {
       if (e.code === 'Enter') this.push('tap');
@@ -80,6 +83,7 @@ export class Input {
   private onPointerDown = (e: PointerEvent): void => {
     if (this.pointerId !== null) return; // ignore extra fingers
     this.pointerId = e.pointerId;
+    this.usingTouch = e.pointerType !== 'mouse';
     this.updateThreshold();
     this.swipe.begin(e.clientX, e.clientY, e.timeStamp);
   };

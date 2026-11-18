@@ -26,7 +26,8 @@ export type GameEventType =
   | 'start'
   | 'pause'
   | 'resume'
-  | 'gameover';
+  | 'gameover'
+  | 'reset';
 
 export type GameListener = (type: GameEventType, detail: string) => void;
 

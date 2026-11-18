@@ -24,6 +24,8 @@ procedurally in code. No external models are downloaded.
 - Puddles slow you down for a moment. Jump them.
 - Collect pennies, rare gold sovereigns (worth 10) and Teapot Tokens.
 - Score is distance plus coins, times your multiplier.
+- New players get a big hint the first time each kind of obstacle appears
+  ("Swipe ⬆ to jump!"; it shows keys instead on a keyboard).
 
 ## Power-ups
 Grab the floating bubbles on the road. Each lasts 8–15 seconds (shown by a timer
@@ -74,7 +76,8 @@ drizzle showers (rain and extra puddles), followed by a rainbow.
 - **Second chance:** when caught, spend a Teapot Token to escape (once per run).
 - **Case File:** your score, best, coins, mission progress, a "Did you know?" fact and a
   Share button (uses the phone's share sheet, or copies the message).
-- **Settings:** music and sound volume, reduced motion, colour-blind friendly UI.
+- **Settings:** music and sound volume, reduced motion, colour-blind friendly UI,
+  and vibration on bumps (phones that support it).
 - Progress saves automatically on the device.
 
 ## Sound
@@ -149,6 +152,8 @@ Add `?gallery` to the URL to review the procedural models side by side, e.g.
 ## Debug URL options
 - `?seed=<n>`: start with a fixed obstacle layout (repeatable runs)
 - `?god`: Jack can't be caught (for automated playtests and screenshots)
+- `?turbo=N`: run N simulation steps per frame (fast automated playthroughs)
+- `?norender`: skip drawing (logic-only playthroughs)
 
 ## Deploy to GitHub Pages
 The workflow in `.github/workflows/deploy.yml` tests, builds and deploys every push

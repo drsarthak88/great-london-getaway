@@ -201,6 +201,7 @@ export class Game {
     document.getElementById('app')?.classList.remove('tea-time');
     this.endReason = null;
     this.powers.reset();
+    this.events.emit('reset');
     this.weather.reset(this.seed);
     this.track.reset(this.seed++);
     this.landmarks.reset();
@@ -366,26 +367,44 @@ export class Game {
     this.enterZone(zoneIndexAt(d));
   }
 
+  /** Debug (automated playtests): called before every simulation step. */
+  debugTick: (() => void) | null = null;
+  /** Debug `?turbo=N`: N fixed simulation steps per frame (fast automated playthroughs). */
+  private readonly turbo = Math.max(1, Math.min(30, Number(new URLSearchParams(location.search).get('turbo')) || 1));
+  /** Debug `?norender`: skip drawing (logic-only playthroughs). */
+  private readonly noRender = new URLSearchParams(location.search).has('norender');
+
   private frame = (time: number): void => {
     const rawDt = this.lastTime < 0 ? 0 : (time - this.lastTime) / 1000;
     this.lastTime = time;
-    if (this.state === 'running' && !this.godMode) this.renderer.adapt(rawDt);
-    const dt = Math.min(rawDt, CONFIG.render.maxDt);
-
+    if (this.state === 'running' && !this.godMode && this.turbo === 1) this.renderer.adapt(rawDt);
+    let dt = Math.min(rawDt, CONFIG.render.maxDt);
     const t0 = performance.now();
-    this.player.controller.clearEvents();
-    this.input.drain(this.handleAction);
+    let simDt = 0;
 
-    // Power-up timers run on real time, so Tea Time doesn't stretch itself.
-    if (this.state === 'running') this.powers.update(dt);
-    let simDt = dt * this.timeScale;
-    if (this.hitStop > 0) {
-      this.hitStop -= dt;
-      simDt *= 0.05;
+    for (let step = 0; step < this.turbo; step++) {
+      if (this.turbo > 1) dt = 1 / 60;
+      this.debugTick?.();
+      this.player.controller.clearEvents();
+      this.input.drain(this.handleAction);
+
+      // Power-up timers run on real time, so Tea Time doesn't stretch itself.
+      if (this.state === 'running') this.powers.update(dt);
+      simDt = dt * this.timeScale;
+      if (this.hitStop > 0) {
+        this.hitStop -= dt;
+        simDt *= 0.05;
+      }
+      if (this.state === 'running') this.update(simDt);
+      else if (this.state === 'caught') this.updateCatch(simDt);
+      else if (this.state === 'gameover') this.overTimer += dt;
+      if (this.turbo > 1 && step < this.turbo - 1) {
+        // Keep landmark passes (Big Ben missions) and the street in step.
+        this.landmarks.update(0, this.distance, this.prevDistance < 0 ? this.distance : this.prevDistance);
+        this.prevDistance = this.distance;
+        this.world.update(this.distance, 0);
+      }
     }
-    if (this.state === 'running') this.update(simDt);
-    else if (this.state === 'caught') this.updateCatch(simDt);
-    else if (this.state === 'gameover') this.overTimer += dt;
 
     const running = this.state === 'running';
     const caught = this.state === 'caught' || this.state === 'gameover';
@@ -415,7 +434,7 @@ export class Game {
     if (running) this.hud.setChase(this.detective.chase.gap, this.detective.chase.stumbleTimer > 0);
     this.sky.update(dt, this.renderer.camera);
     const t1 = performance.now();
-    this.renderer.render();
+    if (!this.noRender) this.renderer.render();
     const t2 = performance.now();
     this.perf.updateMs += (t1 - t0 - this.perf.updateMs) * 0.05;
     this.perf.renderMs += (t2 - t1 - this.perf.renderMs) * 0.05;
@@ -534,6 +553,8 @@ export class Game {
     if (this.powers.isActive('magnet')) magnetPull(this.track.coins, c.x, c.y + 0.8, this.distance, dt);
     collectCoins(this.track.coins, c.x, c.y, c.height, this.distance, this.onCoin);
 
+    this.checkHints();
+
     // --- Missions.
     this.stats.zoneReached = Math.floor(this.distance / ZONE_LENGTH);
     const done = this.missions.check(this.stats);
@@ -623,6 +644,52 @@ export class Game {
     }
   };
 
+  /**
+   * First-run hints: the first time each kind of obstacle comes up in Jack's lane, a
+   * big bubble tells young players what to do (swipe or key, depending on the device).
+   */
+  private checkHints(): void {
+    const seen = this.profile.hints;
+    if (seen.length >= 5 || this.hud.hintShowing) return;
+    const c = this.player.controller;
+    const reach = this.speed * 1.4 + 4;
+    for (const o of this.track.obstacles) {
+      if (!o.active || o.lane !== c.lane || o.knocked) continue;
+      const ahead = o.d - this.distance;
+      if (ahead < 2 || ahead > reach) continue;
+      const k = o.kind;
+      const hint =
+        k === 'ramp' ? 'ramp'
+        : k === 'gap' ? 'gap'
+        : k === 'sign' || k === 'pigeons' ? 'roll'
+        : k === 'barrier' || k === 'postBox' ? 'jump'
+        : k === 'bus' || k === 'guard' || k === 'phoneBox' ? 'dodge'
+        : null;
+      if (!hint || seen.includes(hint)) continue;
+      const touch = this.input.usingTouch;
+      const text: Record<string, string> = {
+        jump: touch ? 'Swipe ⬆ to jump!' : 'Press ↑ or Space to jump!',
+        roll: touch ? 'Swipe ⬇ to roll under!' : 'Press ↓ to roll under!',
+        dodge: touch ? 'Swipe ⬅ or ➡ to dodge!' : 'Press ← or → to dodge!',
+        ramp: 'Run up the ramp onto the bus roofs!',
+        gap: touch ? 'Swipe ⬆ to jump the gap!' : 'Press ↑ to jump the gap!',
+      };
+      seen.push(hint);
+      this.hud.showHint(text[hint]);
+      return;
+    }
+  }
+
+  /** A short buzz on phones that support it (Android), if the player wants it. */
+  private vibrate(ms: number): void {
+    if (!this.profile.settings.vibration || this.godMode) return;
+    try {
+      navigator.vibrate?.(ms);
+    } catch {
+      /* not supported */
+    }
+  }
+
   /** Visual juice for game events: particles, HUD bumps. */
   private onEffectEvent = (type: string, detail: string): void => {
     const c = this.player.controller;
@@ -644,12 +711,15 @@ export class Game {
         break;
       case 'fall':
         fx.emit('splash', c.x, 0.1, -0.5, 30);
+        this.vibrate(90);
         break;
       case 'stumble':
         fx.emit('stars', c.x, c.y + 1.7, 0, 8);
+        this.vibrate(40);
         break;
       case 'crash':
         fx.emit('stars', c.x, c.y + 1.6, 0.3, 14);
+        this.vibrate(120);
         break;
       case 'powerup':
       case 'mission':
@@ -795,6 +865,8 @@ export class Game {
     if (reason === 'crash') this.speed = 0;
     this.hud.clearPopups();
     this.hud.showGotYou(true);
+    // Power-ups stop when Jack is caught (and their sounds with them).
+    this.powers.endAll();
     this.events.emit('caught', reason);
   }
 
