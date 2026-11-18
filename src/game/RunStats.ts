@@ -15,6 +15,10 @@ export class RunStats {
   flightTime = 0;
   /** Obstacles sent flying by the Black Cab Dash. */
   smashed = 0;
+  /** Times Jack flew past Big Ben with the Helicopter Tail. */
+  bigBenFlights = 0;
+  /** Furthest zone reached this run (0 = Westminster, counting on through the cycle). */
+  zoneReached = 0;
 
   reset(): void {
     this.distance = 0;
@@ -29,5 +33,7 @@ export class RunStats {
     this.powerUps = 0;
     this.flightTime = 0;
     this.smashed = 0;
+    this.bigBenFlights = 0;
+    this.zoneReached = 0;
   }
 }

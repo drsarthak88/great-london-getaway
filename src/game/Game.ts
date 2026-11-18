@@ -28,7 +28,39 @@ import { Weather } from './Weather';
 import { Events } from './Events';
 import { ZONES } from '../data/zones';
 import { POSTCARDS } from '../data/facts';
-import { zoneBlend, zoneEntered, zoneIndexAt } from './Zones';
+import { ZONE_LENGTH, zoneBlend, zoneEntered, zoneIndexAt } from './Zones';
+import { CONTINUE_COST, multiplierFor, type Profile } from '../profile/Profile';
+import { MissionTracker } from './Missions';
+import type { MissionDef } from '../data/missions';
+import { pickFact } from '../data/facts';
+
+export interface RunSummary {
+  score: number;
+  best: number;
+  newBest: boolean;
+  coins: number;
+  distance: number;
+  tokens: number;
+  multiplier: number;
+  /** A "Did you know?" fact for the Case File. */
+  fact: string;
+  /** Mission set finished this run (the multiplier goes up next run). */
+  setCompleted: boolean;
+  reason: 'crash' | 'stumbles' | null;
+}
+
+/** How the game talks to the menus (title, pause, continue, Case File). */
+export interface GameHooks {
+  onPause(): void;
+  /** The catch scene finished: offer a second chance if `canContinue`, else end the run. */
+  onCatchEnd(canContinue: boolean): void;
+  onRunEnd(summary: RunSummary): void;
+  onMission(m: MissionDef): void;
+  /** Keyboard/tap input while not running (title, Case File...). */
+  onMenuAction(a: Action): void;
+  /** Save the profile. */
+  persist(): void;
+}
 
 export type GameState = 'ready' | 'running' | 'paused' | 'caught' | 'gameover';
 
@@ -58,6 +90,11 @@ export class Game {
   readonly weather = new Weather();
   readonly weatherFx: WeatherFx;
   readonly events = new Events();
+  readonly profile: Profile;
+  missions: MissionTracker;
+  hooks: GameHooks | null = null;
+  /** The one second chance this run has been used. */
+  continued = false;
   /** Index of the zone Jack is in. */
   zone = 0;
 
@@ -97,7 +134,10 @@ export class Game {
   private readonly prevBox: PlayerBox = { x: 0, y: 0, d: 0, halfW: CONFIG.player.halfWidth, halfD: CONFIG.player.halfDepth, height: CONFIG.player.standHeight };
   private readonly curBox: PlayerBox = { x: 0, y: 0, d: 0, halfW: CONFIG.player.halfWidth, halfD: CONFIG.player.halfDepth, height: CONFIG.player.standHeight };
 
-  constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
+  constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement, profile: Profile) {
+    this.profile = profile;
+    this.missions = new MissionTracker(profile.missions);
+    this.best = profile.best;
     const params = new URLSearchParams(location.search);
     this.godMode = params.has('god');
     if (params.has('seed')) this.seed = Number(params.get('seed')) || 1;
@@ -121,17 +161,14 @@ export class Game {
       this.events.emit({ type: 'landmark', id });
     };
     this.landmarks.onPass = (id) => {
-      if (id === 'bigBen') this.events.emit({ type: 'chime' });
+      if (id !== 'bigBen') return;
+      this.events.emit({ type: 'chime' });
+      if (this.state === 'running' && this.player.controller.flying) this.stats.bigBenFlights++;
     };
     this.weatherFx = new WeatherFx(this.renderer.scene);
     this.track.weather = this.weather;
     this.cameraRig = new CameraRig(this.renderer.camera);
-    this.cameraRig.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    this.hud = new Hud(uiRoot, {
-      onPause: () => this.pause(),
-      onResume: () => this.resume(),
-      onRestart: () => this.restart(),
-    });
+    this.hud = new Hud(uiRoot, () => this.pause());
 
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.pause();
@@ -163,20 +200,23 @@ export class Game {
     this.sky.setBackdrop(ZONES[0].backdrop);
     this.track.update(0, 0, CONFIG.speed.start);
     this.obstacleViews.reset();
-    this.score.reset(1);
+    this.score.reset(multiplierFor(this.profile));
     this.stats.reset();
+    this.continued = false;
+    this.powers.levels = this.profile.upgrades;
+    this.missions = new MissionTracker(this.profile.missions);
+    this.applySettings();
     this.world.reset();
     this.player.reset();
+    this.player.setOutfit(this.profile.equipped);
     this.powerEffects.reset();
     // On the start screen Bones is just behind Jack, about to give chase.
     this.detective.reset(CONFIG.detective.closeGap + 1.2);
     this.cameraRig.reset();
     this.state = 'ready';
-    this.hud.update(0, 0, 0, 1, 0);
-    this.hud.showPrompt(true);
-    this.hud.showPaused(false);
+    this.hud.update(0, 0, 0, this.score.multiplier, 0);
+    this.hud.setVisible(false);
     this.hud.showGotYou(false);
-    this.hud.showGameOver(null);
     this.hud.clearPopups();
     this.updateEnvironment(0);
   }
@@ -184,7 +224,8 @@ export class Game {
   start(): void {
     if (this.state !== 'ready') return;
     this.state = 'running';
-    this.hud.showPrompt(false);
+    this.player.showcase = false;
+    this.hud.setVisible(true);
     this.detective.chase.pullClose(CONFIG.detective.startChaseTime);
   }
 
@@ -193,16 +234,101 @@ export class Game {
     this.start();
   }
 
+  /** Back to the title screen. */
+  quitToTitle(): void {
+    this.reset();
+  }
+
   pause(): void {
     if (this.state !== 'running') return;
     this.state = 'paused';
-    this.hud.showPaused(true);
+    this.hooks?.onPause();
   }
 
   resume(): void {
     if (this.state !== 'paused') return;
     this.state = 'running';
-    this.hud.showPaused(false);
+  }
+
+  /** Apply the player's settings (reduced motion, colour-blind palette). */
+  applySettings(): void {
+    const s = this.profile.settings;
+    this.cameraRig.reducedMotion = s.reducedMotion;
+    document.documentElement.classList.toggle('reduced-motion', s.reducedMotion);
+    document.documentElement.classList.toggle('colour-blind', s.colourBlind);
+  }
+
+  /** Teapot Tokens available for a second chance: saved ones plus any picked up this run. */
+  get tokensAvailable(): number {
+    return this.profile.tokens + this.score.tokens;
+  }
+
+  /** Spend Teapot Tokens to escape Bones's grip and keep running (once per run). */
+  continueRun(): boolean {
+    if (this.state !== 'caught' || this.continued || this.tokensAvailable < CONTINUE_COST) return false;
+    // Spend tokens picked up this run first, then saved ones.
+    let cost = CONTINUE_COST;
+    const fromRun = Math.min(this.score.tokens, cost);
+    this.score.tokens -= fromRun;
+    cost -= fromRun;
+    this.profile.tokens -= cost;
+    this.continued = true;
+    // Clear the road just ahead, put Jack back on his feet, and send Bones packing.
+    for (const o of this.track.obstacles) if (o.active && o.d < this.distance + 45 && o.far > this.distance - 5) o.active = false;
+    const c = this.player.controller;
+    const lane = c.lane;
+    const x = c.x;
+    const y = this.fellIn ? 0 : c.y;
+    const ground = this.fellIn ? 0 : c.groundY;
+    this.fellIn = false;
+    this.detective.chase.knockBack();
+    this.detective.chase.gap = CONFIG.detective.farGap;
+    this.safeTimer = 3;
+    this.player.reset();
+    this.player.setOutfit(this.profile.equipped);
+    Object.assign(c, { lane, prevLane: lane, x, y, groundY: ground, grounded: true, vy: 0 });
+    this.player.flinch(3);
+    this.hud.showGotYou(false);
+    this.hud.toast('Second chance! Run, Jack, run!');
+    this.speed = speedAt(this.runTime) * 0.6;
+    this.state = 'running';
+    this.hooks?.persist();
+    return true;
+  }
+
+  /** Finish the run: bank coins and tokens, update best and missions, save. */
+  endRun(): void {
+    if (this.state !== 'caught') return;
+    this.state = 'gameover';
+    this.overTimer = 0;
+    this.hud.showGotYou(false);
+    this.hud.setVisible(false);
+    const p = this.profile;
+    const score = this.score.total;
+    const newBest = score > p.best;
+    if (newBest) p.best = score;
+    this.best = p.best;
+    p.bestDistance = Math.max(p.bestDistance, Math.floor(this.distance));
+    p.coins += this.score.coins;
+    p.tokens += this.score.tokens;
+    p.totals.runs++;
+    p.totals.distance += Math.floor(this.distance);
+    p.totals.coins += this.score.coins;
+    const setCompleted = this.missions.commitRun(this.stats);
+    const fact = pickFact(p.factIndex++);
+    this.hooks?.persist();
+    this.hooks?.onRunEnd({
+      score,
+      best: p.best,
+      newBest,
+      coins: this.score.coins,
+      distance: Math.floor(this.distance),
+      tokens: this.score.tokens,
+      multiplier: this.score.multiplier,
+      fact,
+      setCompleted,
+      reason: this.endReason,
+    });
   }
 
   /** Debug/test helper: jump the run ahead to `d` with fresh obstacles just in front. */
@@ -261,6 +387,7 @@ export class Game {
     // HUD timers (toasts, postcards) run on real time, even when frames are slow.
     this.hud.update(Math.min(rawDt, 0.25), this.score.total, this.score.coins, this.score.multiplier, this.distance);
     this.hud.setPowers(this.powers);
+    if (running) this.hud.setChase(this.detective.chase.gap, this.detective.chase.stumbleTimer > 0);
     this.sky.update(dt, this.renderer.camera);
     this.renderer.render();
   };
@@ -363,6 +490,16 @@ export class Game {
     // --- Coins (the Teacup Magnet pulls them in first).
     if (this.powers.isActive('magnet')) magnetPull(this.track.coins, c.x, c.y + 0.8, this.distance, dt);
     collectCoins(this.track.coins, c.x, c.y, c.height, this.distance, this.onCoin);
+
+    // --- Missions.
+    this.stats.zoneReached = Math.floor(this.distance / ZONE_LENGTH);
+    const done = this.missions.check(this.stats);
+    if (done) {
+      for (const m of done) {
+        this.hud.toast(`Mission complete: ${m.text}!`, 2.6);
+        this.hooks?.onMission(m);
+      }
+    }
   }
 
   /** Black Cab Dash: send a smashable obstacle flying. */
@@ -566,6 +703,7 @@ export class Game {
     document.getElementById('app')?.classList.remove('tea-time');
     this.catchTimer = CONFIG.stumble.catchTime;
     if (reason === 'crash') this.speed = 0;
+    this.hud.clearPopups();
     this.hud.showGotYou(true);
   }
 
@@ -576,25 +714,14 @@ export class Game {
     const c = this.player.controller;
     c.groundY = this.fellIn ? -6 : groundHeight(this.track.obstacles, c.x, this.distance, c.y);
     c.update(dt);
-    this.catchTimer -= dt;
-    if (this.catchTimer <= 0) this.gameOver();
-  }
-
-  private gameOver(): void {
-    this.state = 'gameover';
-    this.overTimer = 0;
-    const score = this.score.total;
-    const newBest = score > this.best;
-    if (newBest) this.best = score;
-    this.hud.showGotYou(false);
-    this.hud.showGameOver({
-      score,
-      best: this.best,
-      coins: this.score.coins,
-      distance: Math.floor(this.distance),
-      tokens: this.score.tokens,
-      newBest,
-    });
+    if (this.catchTimer > 0) {
+      this.catchTimer -= dt;
+      if (this.catchTimer <= 0) {
+        const canContinue = !this.continued && this.tokensAvailable >= CONTINUE_COST;
+        if (this.hooks) this.hooks.onCatchEnd(canContinue);
+        else this.endRun();
+      }
+    }
   }
 
   private fillBox(b: PlayerBox, x: number, y: number, d: number, height: number): void {
@@ -607,15 +734,15 @@ export class Game {
   private handleAction = (a: Action): void => {
     switch (this.state) {
       case 'ready':
-        if (a === 'tap' || a === 'jump') this.start();
+        if (this.hooks) this.hooks.onMenuAction(a);
+        else if (a === 'tap' || a === 'jump') this.start();
         return;
       case 'paused':
-        if (a === 'pause' || a === 'tap') this.resume();
+      case 'caught':
+        this.hooks?.onMenuAction(a);
         return;
       case 'gameover':
-        if ((a === 'jump' || a === 'tap') && this.overTimer > 0.8) this.restart();
-        return;
-      case 'caught':
+        if (this.overTimer > 0.8) this.hooks?.onMenuAction(a);
         return;
       case 'running': {
         const c = this.player.controller;

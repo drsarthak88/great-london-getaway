@@ -1,0 +1,12 @@
+{
+  "name": "The Great London Getaway",
+  "short_name": "London Getaway",
+  "description": "Marmalade Jack has pinched the Golden Teapot! A bright storybook endless runner through London.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#3fb6ff",
+  "theme_color": "#3fb6ff",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

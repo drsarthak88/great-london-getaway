@@ -12,6 +12,10 @@ export default defineConfig(({ command, isPreview }) => ({
     target: 'es2020',
     sourcemap: false,
     chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      // Keep Three.js in its own long-cached chunk, so game updates don't re-download it.
+      output: { manualChunks: (id) => (id.includes('node_modules/three') ? 'three' : undefined) },
+    },
   },
   test: {
     environment: 'node',
