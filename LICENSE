@@ -1,0 +1,19 @@
+Copyright (c) 2026 Dr Sarthak Chakravarty. All rights reserved.
+
+The Great London Getaway, including its source code, characters (Marmalade Jack,
+Inspector Hemlock Bones and friends), artwork, models, music, sound effects, text
+and game design, is proprietary.
+
+This repository is public so the game can be viewed and played. Viewing the code
+here does not grant any licence to it. Without prior written permission from the
+copyright holder, you may not copy, modify, distribute, publish, sublicense, sell,
+or create derivative works from any part of this project, in whole or in part.
+
+You are welcome to play the published game at
+https://drsarthak88.github.io/great-london-getaway/
+
+Third-party software used by this project (for example Three.js and Vite) remains
+under its own licence; see CREDITS.md. Public-domain material referenced by the game
+(such as the Westminster Quarters chime) remains in the public domain.
+
+To ask about permissions, please open an issue on the repository.

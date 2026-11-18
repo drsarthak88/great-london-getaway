@@ -199,3 +199,13 @@ tests/                 Vitest unit tests for pure logic
 
 ## Credits
 See [CREDITS.md](CREDITS.md).
+
+## Licence
+Copyright © 2026 Dr Sarthak Chakravarty. **All rights reserved.** The code and assets
+are public to view and the game is free to play, but they may not be copied, reused or
+redistributed without permission. See [LICENSE](LICENSE).
+
+## Security and privacy
+To report a security or privacy problem, please use private vulnerability reporting
+as described in [SECURITY.md](SECURITY.md). The game collects no personal data:
+progress is saved only on the player's own device.
