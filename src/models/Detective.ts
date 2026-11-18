@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { toon, toonMap } from '../render/ToonMaterials';
 import { checkTexture } from '../render/Textures';
-import { outlineTree } from '../render/Outline';
-import { mergeRig } from '../render/Merge';
+import { skinRig } from '../render/Skin';
 import { createRig, type BipedRig } from './Biped';
 
 /**
@@ -154,7 +153,6 @@ export function buildDetective(): DetectiveRig {
   magnifier.add(lens);
   rig.handR.add(magnifier);
 
-  mergeRig(rig.root);
-  outlineTree(rig.root, CONFIG.render.characterOutline);
-  return { ...rig, magnifier };
+  // Bake the whole character into a few skinned meshes (far fewer draw calls).
+  return skinRig({ ...rig, magnifier }, CONFIG.render.characterOutline);
 }

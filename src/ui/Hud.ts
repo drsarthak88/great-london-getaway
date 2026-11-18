@@ -128,6 +128,16 @@ export class Hud {
     }
   }
 
+  private lastBump = 0;
+
+  /** A little pop on the coin counter when coins are collected (throttled). */
+  bumpCoins(): void {
+    const now = performance.now();
+    if (now - this.lastBump < 140 || document.documentElement.classList.contains('reduced-motion')) return;
+    this.lastBump = now;
+    this.coinsEl.parentElement?.animate([{ transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 160, easing: 'ease-out' });
+  }
+
   /** Big storybook title as you enter a new part of London. */
   showZone(name: string): void {
     this.zoneEl.textContent = name;

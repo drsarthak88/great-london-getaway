@@ -23,12 +23,27 @@ type ToonLike = THREE.Material & {
   vertexColors?: boolean;
 };
 
-/** Can this material be replaced by a vertex colour? */
+/** Can this material be replaced by a vertex colour? (Glowing ones too: see bakedColor.) */
 function isPlain(mat: ToonLike): boolean {
   if (!(mat as THREE.MeshToonMaterial).isMeshToonMaterial) return false;
-  if (mat.map || mat.vertexColors || mat.transparent || (mat.opacity ?? 1) < 1) return false;
+  return !(mat.map || mat.vertexColors || mat.transparent || (mat.opacity ?? 1) < 1);
+}
+
+/**
+ * The colour to bake for a material. Glowing parts (lamps, gold trim) get their glow
+ * added in, so they still read as bright after merging, at no extra draw call.
+ */
+const baked = new THREE.Color();
+function bakedColor(mat: ToonLike): THREE.Color {
+  baked.copy(mat.color!);
   const e = mat.emissive;
-  return !e || (e.r === 0 && e.g === 0 && e.b === 0) || mat.emissiveIntensity === 0;
+  if (e && mat.emissiveIntensity) {
+    const k = mat.emissiveIntensity * 0.6;
+    baked.r = Math.min(1, baked.r + e.r * k);
+    baked.g = Math.min(1, baked.g + e.g * k);
+    baked.b = Math.min(1, baked.b + e.b * k);
+  }
+  return baked;
 }
 
 const tmp = new THREE.Matrix4();
@@ -74,7 +89,7 @@ function mergeInto(owner: THREE.Object3D, meshes: THREE.Mesh[]): void {
   for (const m of meshes) {
     const mat = m.material as ToonLike;
     if (isPlain(mat)) {
-      vc[m.userData.noOutline ? 1 : 0].push(bake(m, inv, false, mat.color!));
+      vc[m.userData.noOutline ? 1 : 0].push(bake(m, inv, false, bakedColor(mat)));
     } else {
       let list = byMat.get(mat);
       if (!list) byMat.set(mat, (list = []));

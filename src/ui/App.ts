@@ -2,6 +2,7 @@ import type { Game, RunSummary } from '../game/Game';
 import type { Action } from '../input/Input';
 import type { MissionDef } from '../data/missions';
 import type { KeyValueStore } from '../services/Storage';
+import type { AudioEngine } from '../audio/Audio';
 import { LocalLeaderboard, type Leaderboard } from '../services/Leaderboard';
 import { shareScore } from '../services/Share';
 import { CONTINUE_COST, buyOutfit, buyUpgrade, defaultProfile, multiplierFor, saveProfile, toggleOutfit, upgradeCost, type Profile } from '../profile/Profile';
@@ -54,7 +55,9 @@ export class App {
     private readonly game: Game,
     private readonly store: KeyValueStore,
     uiRoot: HTMLElement,
+    private readonly audio: AudioEngine | null = null,
   ) {
+    audio?.setVolumes(game.profile.settings.music, game.profile.settings.sfx);
     this.leaderboard = new LocalLeaderboard(store);
     this.root = document.createElement('div');
     this.root.className = 'ui';
@@ -102,6 +105,8 @@ export class App {
     this.game.player.showcase = screen === 'shop';
     window.clearInterval(this.continueHandle);
     this.root.className = `ui ui-${screen}`;
+    // Gentle menu music on the title and menus; the run music starts with the run.
+    if (screen !== 'none' && screen !== 'pause' && screen !== 'continue' && this.game.state !== 'paused') this.audio?.setMusic('menu');
     switch (screen) {
       case 'title':
         this.root.innerHTML = this.titleHtml();
@@ -148,6 +153,7 @@ export class App {
     if (!el) return;
     const act = el.dataset.act!;
     const arg = el.dataset.arg ?? '';
+    this.audio?.click();
     switch (act) {
       case 'play':
         this.play();
@@ -255,6 +261,7 @@ export class App {
         return;
     }
     this.game.applySettings();
+    this.audio?.setVolumes(s.music, s.sfx);
     this.persist();
   };
 

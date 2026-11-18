@@ -20,19 +20,22 @@ async function boot(): Promise<void> {
     hideSplash();
     return;
   }
-  const [{ Game }, { App }, { LocalStore }, { loadProfile }] = await Promise.all([
+  const [{ Game }, { App }, { LocalStore }, { loadProfile }, { AudioEngine }] = await Promise.all([
     import('./game/Game'),
     import('./ui/App'),
     import('./services/Storage'),
     import('./profile/Profile'),
+    import('./audio/Audio'),
   ]);
   const store = new LocalStore();
   const profile = await loadProfile(store);
+  const audio = new AudioEngine();
   const game = new Game(canvas, uiRoot, profile);
-  const app = new App(game, store, uiRoot);
+  game.events.on(audio.onEvent);
+  const app = new App(game, store, uiRoot, audio);
   requestAnimationFrame(() => requestAnimationFrame(hideSplash));
   // Handles for automated browser tests and console debugging.
-  Object.assign(window as object, { __GLG: game, __APP: app });
+  Object.assign(window as object, { __GLG: game, __APP: app, __AUDIO: audio });
 }
 
 void boot();

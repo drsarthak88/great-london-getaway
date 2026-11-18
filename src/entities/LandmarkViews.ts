@@ -32,9 +32,12 @@ const PLACEMENT: Partial<Record<LandmarkId, { setback: number; scale: number }>>
  * Big Ben (for the Westminster chime).
  */
 export class LandmarkViews {
-  private readonly items = new Map<LandmarkId, { lm: Landmark; minX: number; seenFrame: number }>();
+  private readonly items = new Map<LandmarkId, { lm: Landmark; minX: number; seenFrame: number; announced: number }>();
+  private readonly itemList: { lm: Landmark; minX: number; seenFrame: number; announced: number }[] = [];
+  private curDistance = 0;
+  private curPrev = 0;
+  private curDt = 0;
   private frame = 0;
-  private readonly announced = new Set<string>();
   private time = 0;
 
   /** First sighting of a landmark this run. */
@@ -52,39 +55,47 @@ export class LandmarkViews {
         lm.root.visible = false;
         scene.add(lm.root);
         const box = new THREE.Box3().setFromObject(lm.root);
-        this.items.set(p.id, { lm, minX: box.min.x, seenFrame: -1 });
+        const item = { lm, minX: box.min.x, seenFrame: -1, announced: -1 };
+        this.items.set(p.id, item);
+        this.itemList.push(item);
       }
     }
   }
 
   reset(): void {
-    this.announced.clear();
+    for (const item of this.itemList) item.announced = -1;
   }
 
   update(dt: number, distance: number, prevDistance: number): void {
     this.frame++;
     this.time += dt;
-    const f = this.frame;
-    forLandmarks(distance - BEHIND, distance + AHEAD, (id, d, side, _len, cycle) => {
-      const item = this.items.get(id);
-      if (!item) return;
-      item.seenFrame = f;
-      const root = item.lm.root;
-      root.visible = true;
-      // Set back from the pavement; left-side pieces are mirrored.
-      const pl = PLACEMENT[id];
-      const k = pl?.scale ?? 1;
-      const x = side === 0 ? 0 : side * (STREET_EDGE + 0.6 + (pl?.setback ?? 0) - item.minX * k);
-      root.position.set(x, 0, -(d - distance));
-      root.scale.set(side < 0 ? -k : k, k, k);
-      item.lm.update?.(dt, this.time);
-      const key = `${id}:${cycle}`;
-      if (d - distance < POSTCARD_AT && !this.announced.has(key)) {
-        this.announced.add(key);
-        this.onAppear(id);
-      }
-      if (prevDistance < d && distance >= d) this.onPass(id);
-    });
-    for (const item of this.items.values()) if (item.seenFrame !== f) item.lm.root.visible = false;
+    this.curDt = dt;
+    this.curDistance = distance;
+    this.curPrev = prevDistance;
+    forLandmarks(distance - BEHIND, distance + AHEAD, this.place);
+    for (const item of this.itemList) if (item.seenFrame !== this.frame) item.lm.root.visible = false;
   }
+
+  /** Position one landmark (a bound method, so no closure is allocated per frame). */
+  private place = (id: LandmarkId, d: number, side: -1 | 0 | 1, _len: number, cycle: number): void => {
+    const item = this.items.get(id);
+    if (!item) return;
+    const distance = this.curDistance;
+    item.seenFrame = this.frame;
+    const root = item.lm.root;
+    root.visible = true;
+    // Set back from the pavement; left-side pieces are mirrored.
+    const pl = PLACEMENT[id];
+    const k = pl?.scale ?? 1;
+    const x = side === 0 ? 0 : side * (STREET_EDGE + 0.6 + (pl?.setback ?? 0) - item.minX * k);
+    root.position.set(x, 0, -(d - distance));
+    root.scale.set(side < 0 ? -k : k, k, k);
+    item.lm.update?.(this.curDt, this.time);
+    if (d - distance < POSTCARD_AT && item.announced !== cycle) {
+      item.announced = cycle;
+      this.onAppear(id);
+    }
+    if (this.curPrev < d && distance >= d) this.onPass(id);
+  };
+
 }

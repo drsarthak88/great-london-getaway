@@ -26,6 +26,7 @@ import { LandmarkViews } from '../entities/LandmarkViews';
 import { WeatherFx } from '../entities/WeatherFx';
 import { Weather } from './Weather';
 import { Events } from './Events';
+import { Particles } from '../render/Particles';
 import { ZONES } from '../data/zones';
 import { POSTCARDS } from '../data/facts';
 import { ZONE_LENGTH, zoneBlend, zoneEntered, zoneIndexAt } from './Zones';
@@ -90,6 +91,9 @@ export class Game {
   readonly weather = new Weather();
   readonly weatherFx: WeatherFx;
   readonly events = new Events();
+  readonly particles: Particles;
+  /** Smoothed CPU cost per frame (ms): game logic and render submission. */
+  readonly perf = { updateMs: 0, renderMs: 0 };
   readonly profile: Profile;
   missions: MissionTracker;
   hooks: GameHooks | null = null;
@@ -121,6 +125,10 @@ export class Game {
   /** Seconds since Game Over (taps are ignored briefly so a swipe can't skip it). */
   private overTimer = 0;
   private wasRolling = false;
+  /** Highest point above the ground in the current jump (for landing effects). */
+  private lastAirHeight = 0;
+  /** Brief freeze on big impacts ("hit-stop"), in seconds. */
+  private hitStop = 0;
   /** Seconds of full invulnerability left (helicopter landing, helmet, end of cab dash). */
   private safeTimer = 0;
   /** Jack fell through a raised bascule on Tower Bridge. */
@@ -158,14 +166,16 @@ export class Game {
     this.landmarks.onAppear = (id) => {
       const card = POSTCARDS[id];
       this.hud.showPostcard(card.title, card.facts[Math.floor(Math.random() * card.facts.length)]);
-      this.events.emit({ type: 'landmark', id });
+      this.events.emit('landmark', id);
     };
     this.landmarks.onPass = (id) => {
       if (id !== 'bigBen') return;
-      this.events.emit({ type: 'chime' });
+      this.events.emit('chime');
       if (this.state === 'running' && this.player.controller.flying) this.stats.bigBenFlights++;
     };
     this.weatherFx = new WeatherFx(this.renderer.scene);
+    this.particles = new Particles(this.renderer.scene);
+    this.events.on(this.onEffectEvent);
     this.track.weather = this.weather;
     this.cameraRig = new CameraRig(this.renderer.camera);
     this.hud = new Hud(uiRoot, () => this.pause());
@@ -210,6 +220,7 @@ export class Game {
     this.player.reset();
     this.player.setOutfit(this.profile.equipped);
     this.powerEffects.reset();
+    this.particles.clear();
     // On the start screen Bones is just behind Jack, about to give chase.
     this.detective.reset(CONFIG.detective.closeGap + 1.2);
     this.cameraRig.reset();
@@ -227,6 +238,7 @@ export class Game {
     this.player.showcase = false;
     this.hud.setVisible(true);
     this.detective.chase.pullClose(CONFIG.detective.startChaseTime);
+    this.events.emit('start');
   }
 
   restart(): void {
@@ -242,18 +254,21 @@ export class Game {
   pause(): void {
     if (this.state !== 'running') return;
     this.state = 'paused';
+    this.events.emit('pause');
     this.hooks?.onPause();
   }
 
   resume(): void {
     if (this.state !== 'paused') return;
     this.state = 'running';
+    this.events.emit('resume');
   }
 
   /** Apply the player's settings (reduced motion, colour-blind palette). */
   applySettings(): void {
     const s = this.profile.settings;
     this.cameraRig.reducedMotion = s.reducedMotion;
+    this.particles.enabled = !s.reducedMotion;
     document.documentElement.classList.toggle('reduced-motion', s.reducedMotion);
     document.documentElement.classList.toggle('colour-blind', s.colourBlind);
   }
@@ -290,6 +305,7 @@ export class Game {
     this.player.flinch(3);
     this.hud.showGotYou(false);
     this.hud.toast('Second chance! Run, Jack, run!');
+    this.events.emit('continue');
     this.speed = speedAt(this.runTime) * 0.6;
     this.state = 'running';
     this.hooks?.persist();
@@ -303,6 +319,7 @@ export class Game {
     this.overTimer = 0;
     this.hud.showGotYou(false);
     this.hud.setVisible(false);
+    this.events.emit('gameover');
     const p = this.profile;
     const score = this.score.total;
     const newBest = score > p.best;
@@ -352,14 +369,20 @@ export class Game {
   private frame = (time: number): void => {
     const rawDt = this.lastTime < 0 ? 0 : (time - this.lastTime) / 1000;
     this.lastTime = time;
+    if (this.state === 'running' && !this.godMode) this.renderer.adapt(rawDt);
     const dt = Math.min(rawDt, CONFIG.render.maxDt);
 
+    const t0 = performance.now();
     this.player.controller.clearEvents();
     this.input.drain(this.handleAction);
 
     // Power-up timers run on real time, so Tea Time doesn't stretch itself.
     if (this.state === 'running') this.powers.update(dt);
-    const simDt = dt * this.timeScale;
+    let simDt = dt * this.timeScale;
+    if (this.hitStop > 0) {
+      this.hitStop -= dt;
+      simDt *= 0.05;
+    }
     if (this.state === 'running') this.update(simDt);
     else if (this.state === 'caught') this.updateCatch(simDt);
     else if (this.state === 'gameover') this.overTimer += dt;
@@ -375,6 +398,7 @@ export class Game {
     this.coinViews.update(animDt, this.distance);
     this.powerViews.update(animDt, this.distance);
     this.world.update(this.distance, animDt);
+    this.particles.update(animDt, this.state === 'running' ? this.speed : 0);
     this.landmarks.update(animDt, this.distance, this.prevDistance < 0 ? this.distance : this.prevDistance);
     this.updateEnvironment(animDt);
     this.prevDistance = this.distance;
@@ -383,13 +407,18 @@ export class Game {
     // Jack stays in frame at the top of those big arcs.
     const camGround = pc.flying ? pc.y : pc.grounded ? pc.y : pc.groundY;
     const bigJumps = this.powers.isActive('spring') || this.powers.isActive('brolly');
-    this.cameraRig.update(dt, pc.x, pc.y, this.renderer.portrait, camGround, bigJumps ? 0.55 : undefined);
+    const fovKick = this.powers.isActive('cabDash') ? 9 : pc.flying ? 5 : 0;
+    this.cameraRig.update(dt, pc.x, pc.y, this.renderer.portrait, camGround, bigJumps ? 0.55 : undefined, fovKick);
     // HUD timers (toasts, postcards) run on real time, even when frames are slow.
     this.hud.update(Math.min(rawDt, 0.25), this.score.total, this.score.coins, this.score.multiplier, this.distance);
     this.hud.setPowers(this.powers);
     if (running) this.hud.setChase(this.detective.chase.gap, this.detective.chase.stumbleTimer > 0);
     this.sky.update(dt, this.renderer.camera);
+    const t1 = performance.now();
     this.renderer.render();
+    const t2 = performance.now();
+    this.perf.updateMs += (t1 - t0 - this.perf.updateMs) * 0.05;
+    this.perf.renderMs += (t2 - t1 - this.perf.renderMs) * 0.05;
   };
 
   private update(dt: number): void {
@@ -420,8 +449,17 @@ export class Game {
     c.update(dt);
     this.fillBox(this.curBox, c.x, c.y, this.distance, c.height);
 
-    if (c.justJumped) this.stats.jumps++;
-    if (c.rolling && !this.wasRolling) this.stats.rolls++;
+    if (c.justJumped) {
+      this.stats.jumps++;
+      this.events.emit('jump', c.jumpMultiplier > 1 ? 'big' : '');
+    }
+    if (c.justLanded) this.events.emit('land', this.lastAirHeight > 2.5 ? 'big' : '');
+    if (c.justChangedLane) this.events.emit('lane');
+    if (c.rolling && !this.wasRolling) {
+      this.stats.rolls++;
+      this.events.emit('roll');
+    }
+    this.lastAirHeight = c.grounded ? 0 : Math.max(this.lastAirHeight, c.y - c.groundY);
     this.wasRolling = c.rolling;
     if (c.grounded && c.y > 0.5) {
       const top = platformUnder(this.track.obstacles, c.x, this.distance, c.y);
@@ -454,6 +492,7 @@ export class Game {
         }
         this.fellIn = true;
         this.cameraRig.shake(0.6);
+        this.events.emit('fall');
         this.beginCatch('crash');
         this.hud.toast('Splash! Into the Thames!', 2);
         return;
@@ -462,6 +501,7 @@ export class Game {
         o.hit = true;
         this.slowTimer = CONFIG.stumble.puddleTime;
         this.stats.puddles++;
+        this.events.emit('puddle');
         this.hud.toast('Splash!', 0.8);
         continue;
       }
@@ -473,12 +513,15 @@ export class Game {
         this.safeTimer = CONFIG.powerups.shieldGrace;
         this.player.flinch(CONFIG.powerups.shieldGrace);
         this.cameraRig.shake(0.35);
+        this.events.emit('shield');
         this.hud.toast('Phew! The helmet took the knock!');
         continue;
       }
       if (hit === 'crash') {
         this.player.bonk();
         this.cameraRig.shake(0.9);
+        this.hitStop = 0.09;
+        this.events.emit('crash');
         this.beginCatch('crash');
         return;
       }
@@ -497,6 +540,7 @@ export class Game {
     if (done) {
       for (const m of done) {
         this.hud.toast(`Mission complete: ${m.text}!`, 2.6);
+        this.events.emit('mission');
         this.hooks?.onMission(m);
       }
     }
@@ -507,6 +551,8 @@ export class Game {
     o.knocked = true;
     o.hit = true;
     this.stats.smashed++;
+    this.particles.emit('debris', o.x, 1, -(o.d - this.distance), 16);
+    this.events.emit('smash', o.kind);
     this.score.addDistance(10);
     this.cameraRig.shake(0.2);
   }
@@ -545,6 +591,7 @@ export class Game {
     this.stats.stumbles++;
     this.player.flinch(CONFIG.stumble.grace);
     this.cameraRig.shake(0.45);
+    this.events.emit('stumble');
     if (this.detective.chase.stumble() === 'caught') {
       this.beginCatch('stumbles');
       return true;
@@ -553,6 +600,7 @@ export class Game {
       // Corgi Pal barks him back, so this stumble doesn't count against you.
       this.detective.chase.knockBack();
       this.powerEffects.bark();
+      this.events.emit('bark');
       this.hud.toast('Woof! Corgi Pal chases Inspector Bones back!');
       return false;
     }
@@ -566,6 +614,7 @@ export class Game {
       return;
     }
     this.score.addCoin(coin.kind);
+    this.events.emit('coin', coin.kind);
     if (coin.kind === 'penny') this.stats.pennies++;
     else if (coin.kind === 'sovereign') this.stats.sovereigns++;
     else {
@@ -574,12 +623,50 @@ export class Game {
     }
   };
 
+  /** Visual juice for game events: particles, HUD bumps. */
+  private onEffectEvent = (type: string, detail: string): void => {
+    const c = this.player.controller;
+    const fx = this.particles;
+    switch (type) {
+      case 'coin':
+        fx.emit(detail === 'penny' ? 'sparkle' : 'confetti', c.x, c.y + 1, -0.3, detail === 'penny' ? 5 : 14);
+        this.hud.bumpCoins();
+        break;
+      case 'jump':
+        fx.emit('dust', c.x, c.groundY + 0.05, 0.2, detail === 'big' ? 10 : 5);
+        break;
+      case 'land':
+        fx.emit('dust', c.x, c.y + 0.05, 0.1, detail === 'big' ? 16 : 6);
+        if (detail === 'big') this.cameraRig.shake(0.25);
+        break;
+      case 'puddle':
+        fx.emit('splash', c.x, 0.1, -0.2, 16);
+        break;
+      case 'fall':
+        fx.emit('splash', c.x, 0.1, -0.5, 30);
+        break;
+      case 'stumble':
+        fx.emit('stars', c.x, c.y + 1.7, 0, 8);
+        break;
+      case 'crash':
+        fx.emit('stars', c.x, c.y + 1.6, 0.3, 14);
+        break;
+      case 'powerup':
+      case 'mission':
+      case 'continue':
+        fx.emit('confetti', c.x, c.y + 1.4, 0, type === 'powerup' ? 18 : 28);
+        break;
+      default:
+        break;
+    }
+  };
+
   private enterZone(index: number): void {
     this.zone = index;
     const z = ZONES[index];
     this.hud.showZone(z.name);
     this.sky.setBackdrop(z.backdrop);
-    this.events.emit({ type: 'zone', zone: z.id });
+    this.events.emit('zone', z.id);
     this.detective.chase.boost = z.detectiveBoost ? 1.7 : 1;
     if (z.detectiveBoost) this.hud.toast('Inspector Bones knows Baker Street well: he is faster here!', 3);
   }
@@ -634,6 +721,7 @@ export class Game {
     const c = this.player.controller;
     this.powers.activate(kind);
     this.stats.powerUps++;
+    this.events.emit('powerup', kind);
     this.hud.toast(`${POWER_NAMES[kind]}!`, 1.6);
     const P = CONFIG.powerups;
     switch (kind) {
@@ -662,6 +750,7 @@ export class Game {
       case 'corgi':
         this.detective.chase.knockBack();
         this.powerEffects.bark();
+        this.events.emit('bark');
         break;
       default:
         break;
@@ -670,6 +759,7 @@ export class Game {
 
   private onPowerEnd = (kind: PowerKind): void => {
     const c = this.player.controller;
+    this.events.emit('powerEnd', kind);
     switch (kind) {
       case 'helicopter':
         c.flying = false;
@@ -705,6 +795,7 @@ export class Game {
     if (reason === 'crash') this.speed = 0;
     this.hud.clearPopups();
     this.hud.showGotYou(true);
+    this.events.emit('caught', reason);
   }
 
   /** The "Got you!" scene: the world grinds to a halt while Bones grabs Jack. */

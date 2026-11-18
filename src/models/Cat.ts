@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { toon, toonMap } from '../render/ToonMaterials';
 import { stripeTexture } from '../render/Textures';
-import { outlineTree } from '../render/Outline';
-import { mergeRig } from '../render/Merge';
+import { skinRig } from '../render/Skin';
 import { createRig, type BipedRig } from './Biped';
 import { buildTeapot } from './Teapot';
 
@@ -71,6 +70,7 @@ export function buildCat(): CatRig {
   strap.scale.set(1, 0.92, 1);
   rig.torso.add(strap);
   const teapot = buildTeapot();
+  teapot.userData.keep = true;
   teapot.scale.setScalar(0.36);
   teapot.position.set(0, 0.38, 0.33);
   teapot.rotation.set(0.15, Math.PI / 2, 0);
@@ -201,7 +201,6 @@ export function buildCat(): CatRig {
   neckMount.position.y = 0.6;
   rig.torso.add(neckMount);
 
-  mergeRig(rig.root);
-  outlineTree(rig.root, CONFIG.render.characterOutline);
-  return { ...rig, hatMount, neckMount, teapot };
+  // Bake the whole character into a few skinned meshes (far fewer draw calls).
+  return skinRig({ ...rig, hatMount, neckMount, teapot }, CONFIG.render.characterOutline);
 }

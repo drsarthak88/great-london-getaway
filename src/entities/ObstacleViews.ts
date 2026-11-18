@@ -4,6 +4,9 @@ import { buildBus } from '../models/Bus';
 import { buildCab } from '../models/Cab';
 import { buildBarrier, buildBridgeGap, buildGuard, buildPhoneBox, buildPigeons, buildPostBox, buildPuddle, buildRamp, buildSign, type PigeonFlock } from '../models/Props';
 
+/** Obstacles beyond this distance ahead are hidden (they'd be lost in the fog anyway). */
+const DRAW_AHEAD = 125;
+
 interface View {
   obj: THREE.Object3D;
   busy: boolean;
@@ -102,6 +105,8 @@ export class ObstacleViews {
         v.knockT = 0;
         v.obj.rotation.set(0, 0, 0);
       }
+      // Far ahead in the fog there's nothing to see: skip the draw calls.
+      v.obj.visible = o.d - distance < DRAW_AHEAD;
       // Model origin is the centre of the footprint.
       v.obj.position.set(o.x, 0, -(o.d + o.spec.length / 2 - distance));
       if (o.knocked && !v.flock) {

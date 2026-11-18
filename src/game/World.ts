@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CONFIG } from '../config';
 import { toon, toonMap, toonVertexColors } from '../render/ToonMaterials';
-import { outlineTree, refreshInstancedBounds } from '../render/Outline';
+import { outlineTree } from '../render/Outline';
 import { mergeStatic } from '../render/Merge';
 import { TrackLayout } from './TrackLayout';
 import { mulberry32 } from '../utils/random';
@@ -33,17 +33,19 @@ type Part = 'road' | 'mark' | 'pave' | 'ground';
 interface Chunk {
   group: THREE.Group;
   base: THREE.Mesh;
-  buildings: THREE.InstancedMesh;
-  windows: THREE.InstancedMesh;
-  doors: THREE.InstancedMesh;
-  chimneys: THREE.InstancedMesh;
-  trunks: THREE.InstancedMesh;
-  canopies: THREE.InstancedMesh;
-  stalls: THREE.InstancedMesh;
-  lamps: THREE.InstancedMesh;
-  lanterns: THREE.InstancedMesh;
   water: [THREE.Mesh, THREE.Mesh];
 }
+
+/** Per-chunk instance capacity of each shared instanced mesh. */
+const CAP = {
+  buildings: CONFIG.world.buildingsPerSide * 2,
+  windows: CONFIG.world.buildingsPerSide * 2 * WINDOW_COLS * WINDOW_ROWS,
+  doors: CONFIG.world.buildingsPerSide * 2,
+  chimneys: CONFIG.world.buildingsPerSide * 2,
+  trees: CONFIG.world.buildingsPerSide * 2,
+  stalls: 6,
+  lamps: 4,
+};
 
 export class World {
   readonly root = new THREE.Group();
@@ -52,6 +54,22 @@ export class World {
   readonly lanternMat: THREE.MeshToonMaterial;
   private readonly waterTex: THREE.Texture;
   private readonly chunks: Chunk[] = [];
+  /**
+   * Street furniture shared by all chunks: one instanced mesh per kind, each chunk
+   * owning a fixed slice of instances. Everything lives in track space inside `root`,
+   * which slides toward the camera as the run advances, so only re-dressed chunks
+   * ever rewrite their instances.
+   */
+  private buildings!: THREE.InstancedMesh;
+  private windows!: THREE.InstancedMesh;
+  private doors!: THREE.InstancedMesh;
+  private chimneys!: THREE.InstancedMesh;
+  private trunks!: THREE.InstancedMesh;
+  private canopies!: THREE.InstancedMesh;
+  private stalls!: THREE.InstancedMesh;
+  private lamps!: THREE.InstancedMesh;
+  private lanterns!: THREE.InstancedMesh;
+  private readonly zero = new THREE.Matrix4().makeScale(0, 0, 0);
   private readonly rng = mulberry32(1234);
   private readonly tmpMat = new THREE.Matrix4();
   private readonly tmpPos = new THREE.Vector3();
@@ -86,7 +104,29 @@ export class World {
     this.waterTex = waterTexture();
     const waterMat = toonMap(this.waterTex, { emissive: 0x0f8fc0, emissiveIntensity: 0.25 });
 
-    const perSide = CONFIG.world.buildingsPerSide;
+    const n = chunkCount;
+    const shared = (geo: THREE.BufferGeometry, mat: THREE.Material, cap: number, colours: boolean, outline: boolean): THREE.InstancedMesh => {
+      const im = new THREE.InstancedMesh(geo, mat, cap * n);
+      if (colours) im.setColorAt(0, this.tmpColor.set(0xffffff));
+      for (let k = 0; k < cap * n; k++) im.setMatrixAt(k, this.zero);
+      im.frustumCulled = false;
+      if (outline) {
+        outlineTree(im);
+        (im.children[0] as THREE.InstancedMesh).frustumCulled = false;
+      }
+      this.root.add(im);
+      return im;
+    };
+    this.buildings = shared(buildingGeo, buildingMat, CAP.buildings, true, true);
+    this.windows = shared(windowGeo, windowMat, CAP.windows, false, false);
+    this.doors = shared(windowGeo, doorMat, CAP.doors, true, false);
+    this.chimneys = shared(chimneyGeo, buildingMat, CAP.chimneys, true, true);
+    this.trunks = shared(trunkGeo, toon(0x9a5b2e), CAP.trees, false, false);
+    this.canopies = shared(canopyGeo, buildingMat, CAP.trees, true, true);
+    this.stalls = shared(stallGeo, toonVertexColors(), CAP.stalls, false, true);
+    this.lamps = shared(lampGeo, toon(0x24324a), CAP.lamps, false, false);
+    this.lanterns = shared(lanternGeo, this.lanternMat, CAP.lamps, false, false);
+
     for (let i = 0; i < chunkCount; i++) {
       const group = new THREE.Group();
 
@@ -104,27 +144,7 @@ export class World {
       water[1].position.x = STREET_EDGE + 20;
       group.add(water[0], water[1]);
 
-      const buildings = new THREE.InstancedMesh(buildingGeo, buildingMat, perSide * 2);
-      buildings.setColorAt(0, this.tmpColor.set(0xffffff));
-      outlineTree(buildings);
-      const windows = new THREE.InstancedMesh(windowGeo, windowMat, perSide * 2 * WINDOW_COLS * WINDOW_ROWS);
-      const doors = new THREE.InstancedMesh(windowGeo, doorMat, perSide * 2);
-      doors.setColorAt(0, this.tmpColor.set(0xffffff));
-      const chimneys = new THREE.InstancedMesh(chimneyGeo, buildingMat, perSide * 2);
-      chimneys.setColorAt(0, this.tmpColor.set(0xffffff));
-      outlineTree(chimneys);
-      const trunks = new THREE.InstancedMesh(trunkGeo, toon(0x9a5b2e), perSide * 2);
-      const canopies = new THREE.InstancedMesh(canopyGeo, buildingMat, perSide * 2);
-      canopies.setColorAt(0, this.tmpColor.set(0xffffff));
-      outlineTree(canopies);
-      const stalls = new THREE.InstancedMesh(stallGeo, toonVertexColors(), 6);
-      outlineTree(stalls);
-      const lamps = new THREE.InstancedMesh(lampGeo, toon(0x24324a), 4);
-      const lanterns = new THREE.InstancedMesh(lanternGeo, this.lanternMat, 4);
-      for (const m of [windows, doors]) m.frustumCulled = true;
-      group.add(buildings, windows, doors, chimneys, trunks, canopies, stalls, lamps, lanterns);
-
-      this.chunks.push({ group, base, buildings, windows, doors, chimneys, trunks, canopies, stalls, lamps, lanterns, water });
+      this.chunks.push({ group, base, water });
       this.root.add(group);
     }
 
@@ -141,9 +161,8 @@ export class World {
   update(distance: number, dt = 0): void {
     this.time += dt;
     this.layout.update(distance, (i) => this.dress(i));
-    for (let i = 0; i < this.chunks.length; i++) {
-      this.chunks[i].group.position.z = -(this.layout.starts[i] - distance);
-    }
+    // Everything is laid out in track space; slide the whole street toward the camera.
+    this.root.position.z = distance;
     // Ripple the river.
     this.waterTex.offset.set(this.time * 0.03, this.time * 0.05);
   }
@@ -209,7 +228,15 @@ export class World {
     const d0 = this.layout.starts[i];
     const mid = d0 + L / 2;
     const zone = ZONES[zoneIndexAt(mid)];
+    c.group.position.z = -d0;
     this.colorBase(c, zone);
+    // Each chunk owns slots [i * cap, (i + 1) * cap) of every shared instanced mesh.
+    const ob = i * CAP.buildings;
+    const ow = i * CAP.windows;
+    const ot = i * CAP.trees;
+    const os = i * CAP.stalls;
+    const ol = i * CAP.lamps;
+    const zBase = -d0;
 
     const rivers = [riverAt(-1, mid), riverAt(1, mid)];
     c.water[0].visible = rivers[0];
@@ -226,7 +253,7 @@ export class World {
     for (let s = 0; s < 2; s++) {
       const side = s === 0 ? -1 : 1;
       for (let k = 0; k < perSide; k++) {
-        const z = -(k + 0.5) * slot;
+        const z = zBase - (k + 0.5) * slot;
         const dCentre = d0 + (k + 0.5) * slot;
         const hidden = rivers[s] || clearance(side as -1 | 1, dCentre - slot / 2, dCentre + slot / 2);
         if (hidden) continue;
@@ -234,11 +261,11 @@ export class World {
           // Park: lollipop trees on the grass.
           const h = 2.2 + r() * 1.2;
           this.tmpPos.set(side * (baseX + 1.5 + r() * 2), 0, z + (r() - 0.5) * 2);
-          this.place(c.trunks, nt, this.tmpPos, 1, h, 1);
+          this.place(this.trunks, ot + nt, this.tmpPos, 1, h, 1);
           this.tmpPos.y = h + 1.1;
           const sz = 1.7 + r() * 0.8;
-          this.place(c.canopies, nt, this.tmpPos, sz, sz * 0.95, sz);
-          c.canopies.setColorAt(nt, this.tmpColor.setHex(r() < 0.5 ? 0x4cc95a : r() < 0.5 ? 0x7ed957 : 0x2fb34a));
+          this.place(this.canopies, ot + nt, this.tmpPos, sz, sz * 0.95, sz);
+          this.canopies.setColorAt(ot + nt, this.tmpColor.setHex(r() < 0.5 ? 0x4cc95a : r() < 0.5 ? 0x7ed957 : 0x2fb34a));
           nt++;
           continue;
         }
@@ -247,12 +274,12 @@ export class World {
         const depth = 6 + r() * 3;
         const x = side * (baseX + depth / 2);
         this.tmpPos.set(x, 0, z);
-        this.place(c.buildings, nb, this.tmpPos, depth, height, width);
-        c.buildings.setColorAt(nb, this.tmpColor.setHex(zone.buildings[Math.floor(r() * zone.buildings.length)]));
+        this.place(this.buildings, ob + nb, this.tmpPos, depth, height, width);
+        this.buildings.setColorAt(ob + nb, this.tmpColor.setHex(zone.buildings[Math.floor(r() * zone.buildings.length)]));
         // Chimney stack on the roof.
         this.tmpPos.set(x + side * (r() - 0.5) * 2, height, z + (r() - 0.5) * (width - 1.5));
-        this.place(c.chimneys, nb, this.tmpPos, 0.8, 0.9 + r() * 0.6, 1.2);
-        c.chimneys.setColorAt(nb, this.tmpColor.setHex(r() < 0.5 ? 0xd9542f : 0xffc93c));
+        this.place(this.chimneys, ob + nb, this.tmpPos, 0.8, 0.9 + r() * 0.6, 1.2);
+        this.chimneys.setColorAt(ob + nb, this.tmpColor.setHex(r() < 0.5 ? 0xd9542f : 0xffc93c));
         nb++;
         // Windows on the road-facing facade, and a bright front door.
         const faceX = side * (baseX - 0.03);
@@ -262,20 +289,20 @@ export class World {
           for (let col = 0; col < WINDOW_COLS; col++) {
             if (row === 0 && col === 1) continue; // door goes here
             this.tmpPos.set(faceX, 1.5 + row * 1.9, z + (col - 1) * (width / 3.2));
-            this.placeRot(c.windows, nw++, this.tmpPos, rot, 0.95, 1.25);
+            this.placeRot(this.windows, ow + nw++, this.tmpPos, rot, 0.95, 1.25);
           }
         }
         this.tmpPos.set(faceX, 1.0, z);
-        this.placeRot(c.doors, nd, this.tmpPos, rot, 1.0, 2.0);
-        c.doors.setColorAt(nd++, this.tmpColor.setHex(zone.doors[Math.floor(r() * zone.doors.length)]));
+        this.placeRot(this.doors, ob + nd, this.tmpPos, rot, 1.0, 2.0);
+        this.doors.setColorAt(ob + nd++, this.tmpColor.setHex(zone.doors[Math.floor(r() * zone.doors.length)]));
       }
     }
-    this.finishInstances(c.buildings, nb);
-    this.finishInstances(c.chimneys, nb);
-    this.finishInstances(c.windows, nw);
-    this.finishInstances(c.doors, nd);
-    this.finishInstances(c.trunks, nt);
-    this.finishInstances(c.canopies, nt);
+    this.finishSlice(this.buildings, ob, nb, CAP.buildings);
+    this.finishSlice(this.chimneys, ob, nb, CAP.chimneys);
+    this.finishSlice(this.windows, ow, nw, CAP.windows);
+    this.finishSlice(this.doors, ob, nd, CAP.doors);
+    this.finishSlice(this.trunks, ot, nt, CAP.trees);
+    this.finishSlice(this.canopies, ot, nt, CAP.trees);
 
     // Market stalls along the pavement (Camden).
     let ns = 0;
@@ -287,12 +314,12 @@ export class World {
         for (let s = 0; s < 2; s++) {
           const side = s === 0 ? -1 : 1;
           if (rivers[s]) continue;
-          this.tmpPos.set(side * (ROAD_HALF + PAVE_W * 0.55), 0.3, -(k + 0.5) * (L / 3));
-          this.placeRot(c.stalls, ns++, this.tmpPos, -side * (Math.PI / 2), 1, 1);
+          this.tmpPos.set(side * (ROAD_HALF + PAVE_W * 0.55), 0.3, zBase - (k + 0.5) * (L / 3));
+          this.placeRot(this.stalls, os + ns++, this.tmpPos, -side * (Math.PI / 2), 1, 1);
         }
       }
     }
-    this.finishInstances(c.stalls, ns);
+    this.finishSlice(this.stalls, os, ns, CAP.stalls);
 
     // Lamp posts with glowing lanterns (Victorian gas lamps on Baker Street are taller).
     let m = 0;
@@ -300,17 +327,17 @@ export class World {
     for (let s = 0; s < 2; s++) {
       const side = s === 0 ? -1 : 1;
       for (let k = 0; k < 2; k++) {
-        const z = -(k + 0.25) * (L / 2);
+        const z = zBase - (k + 0.25) * (L / 2);
         this.tmpPos.set(side * (ROAD_HALF + 0.6), 0.3, z);
-        this.place(c.lamps, m, this.tmpPos, 1, lampH, 1);
+        this.place(this.lamps, ol + m, this.tmpPos, 1, lampH, 1);
         this.tmpPos.y = 0.3 + lampH + 0.25;
         const ls = zone.gasLamps ? 1.25 : 0.9;
-        this.place(c.lanterns, m, this.tmpPos, ls, ls, ls);
+        this.place(this.lanterns, ol + m, this.tmpPos, ls, ls, ls);
         m++;
       }
     }
-    this.finishInstances(c.lamps, m);
-    this.finishInstances(c.lanterns, m);
+    this.finishSlice(this.lamps, ol, m, CAP.lamps);
+    this.finishSlice(this.lanterns, ol, m, CAP.lamps);
   }
 
   private place(im: THREE.InstancedMesh, i: number, pos: THREE.Vector3, sx: number, sy: number, sz: number): void {
@@ -327,13 +354,13 @@ export class World {
     im.setMatrixAt(i, this.tmpMat);
   }
 
-  private finishInstances(im: THREE.InstancedMesh, count: number): void {
-    im.count = count;
+  /** Hide this chunk's unused slots and flag the buffers for upload. */
+  private finishSlice(im: THREE.InstancedMesh, offset: number, used: number, cap: number): void {
+    for (let k = used; k < cap; k++) im.setMatrixAt(offset + k, this.zero);
     im.instanceMatrix.needsUpdate = true;
     if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    if (count > 0) refreshInstancedBounds(im);
-    else for (const ch of im.children) (ch as THREE.InstancedMesh).count = 0;
   }
+
 }
 
 // ---------- procedural textures and shapes ----------
