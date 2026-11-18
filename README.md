@@ -26,6 +26,15 @@ npm run build      # type-check and production build into dist/
 npm run preview    # serve the build at http://localhost:4173/great-london-getaway/
 ```
 
+## Model gallery
+Add `?gallery` to the URL to review the procedural models side by side, e.g.
+`http://localhost:5173/?gallery&anim=run&view=front&focus=cat`.
+
+- `anim`: `run`, `idle`, `jump`, `fall` or `roll`
+- `view`: `front`, `back` or `side`
+- `focus`: `cat` or `detective` for a close-up
+- `t`: freeze the animation at that many seconds (useful for screenshots)
+
 ## Deploy to GitHub Pages
 The workflow in `.github/workflows/deploy.yml` tests, builds and deploys every push
 to `main`. Pull requests are built and tested but not deployed.
@@ -46,10 +55,14 @@ src/
   config.ts            all gameplay tunables in one place
   game/                Game loop and states, World (pooled track chunks),
                        TrackLayout, Lanes, Difficulty, CameraRig
-  entities/            PlayerController (pure movement logic) and Player (view)
+  entities/            PlayerController (pure movement logic), Player and Detective
+                       views, CharacterAnimator + Poses (procedural animation)
   input/               keyboard + swipe input, SwipeDetector (pure)
-  models/              procedural builders (Golden Teapot, more to come)
-  render/              renderer, toon materials, outlines
+  models/              procedural builders: Biped rig, Cat (Jack), Detective,
+                       Bus, Cab, Teapot
+  debug/               model gallery (open the game with ?gallery)
+  render/              renderer, toon materials, outlines, canvas textures,
+                       static mesh merging
   ui/                  HTML/CSS overlays (HUD)
   utils/               small pure helpers (math, seeded random)
 tests/                 Vitest unit tests for pure logic

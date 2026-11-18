@@ -3,6 +3,7 @@ import { Renderer } from '../render/Renderer';
 import { Input, type Action } from '../input/Input';
 import { World } from './World';
 import { Player } from '../entities/Player';
+import { Detective } from '../entities/Detective';
 import { CameraRig } from './CameraRig';
 import { speedAt } from './Difficulty';
 import { Hud } from '../ui/Hud';
@@ -19,6 +20,7 @@ export class Game {
   readonly input: Input;
   readonly world: World;
   readonly player: Player;
+  readonly detective: Detective;
   readonly cameraRig: CameraRig;
   readonly hud: Hud;
 
@@ -38,6 +40,7 @@ export class Game {
     this.input = new Input(canvas);
     this.world = new World(this.renderer.scene);
     this.player = new Player(this.renderer.scene);
+    this.detective = new Detective(this.renderer.scene);
     this.cameraRig = new CameraRig(this.renderer.camera);
     this.hud = new Hud(uiRoot, () => this.pause(), () => this.resume());
 
@@ -55,6 +58,8 @@ export class Game {
     this.runTime = 0;
     this.world.reset();
     this.player.reset();
+    // On the start screen Bones is just behind Jack, about to give chase.
+    this.detective.reset(CONFIG.detective.closeGap + 1.2);
     this.cameraRig.reset();
     this.state = 'ready';
     this.hud.setDistance(0);
@@ -66,6 +71,7 @@ export class Game {
     if (this.state !== 'ready') return;
     this.state = 'running';
     this.hud.showPrompt(false);
+    this.detective.chase.pullClose(CONFIG.detective.startChaseTime);
   }
 
   pause(): void {
@@ -90,7 +96,10 @@ export class Game {
 
     if (this.state === 'running') this.update(dt * this.timeScale);
 
-    this.player.sync(this.state === 'running' ? dt * this.timeScale : 0, this.speed);
+    const running = this.state === 'running';
+    const animDt = this.state === 'paused' ? 0 : dt * this.timeScale;
+    this.player.sync(animDt, this.speed, running);
+    this.detective.update(animDt, this.player.controller.x, this.speed, running);
     this.cameraRig.update(dt, this.player.controller.x, this.player.controller.y, this.renderer.portrait);
     this.renderer.render();
   };

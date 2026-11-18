@@ -22,7 +22,7 @@ export class CameraRig {
     const height = portrait ? c.portraitHeight : c.height;
     const dist = portrait ? c.portraitDistance : c.distance;
     this.camera.position.set(this.x, height + this.y, dist);
-    this.look.set(this.x * 0.8, 0.9 + this.y * 0.5, -c.lookAhead);
+    this.look.set(this.x * 0.8, 0.6 + this.y * 0.5, -c.lookAhead);
     this.camera.lookAt(this.look);
   }
 }

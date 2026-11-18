@@ -57,3 +57,22 @@ export function toon(color: number, opts: ToonOptions = {}): THREE.MeshToonMater
   }
   return mat;
 }
+
+const texCache = new Map<string, THREE.MeshToonMaterial>();
+
+/** Shared toon material with a colour map (stripes, checks, signs). */
+export function toonMap(map: THREE.Texture, opts: ToonOptions & { color?: number } = {}): THREE.MeshToonMaterial {
+  const key = `${map.uuid}|${opts.color ?? 0xffffff}|${opts.emissive ?? 0}|${opts.emissiveIntensity ?? 1}`;
+  let mat = texCache.get(key);
+  if (!mat) {
+    mat = new THREE.MeshToonMaterial({
+      color: opts.color ?? 0xffffff,
+      map,
+      gradientMap: getToonGradient(),
+      emissive: opts.emissive ?? 0x000000,
+      emissiveIntensity: opts.emissiveIntensity ?? 1,
+    });
+    texCache.set(key, mat);
+  }
+  return mat;
+}

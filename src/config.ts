@@ -15,6 +15,8 @@ export const CONFIG = {
     toonSteps: 4,
     /** Thickness of inverted-hull outlines in world units. */
     outlineThickness: 0.035,
+    /** Thinner ink line for characters, which are small on screen and seen close up. */
+    characterOutline: 0.022,
     fogNear: 60,
     fogFar: 170,
     /** Largest simulation step; longer frames (tab switches, hitches) are clamped. */
@@ -56,10 +58,10 @@ export const CONFIG = {
   },
 
   camera: {
-    height: 4.1,
-    distance: 7,
-    portraitHeight: 4.9,
-    portraitDistance: 8.4,
+    height: 4.7,
+    distance: 7.4,
+    portraitHeight: 5.4,
+    portraitDistance: 8.8,
     lookAhead: 9,
     /** How much of the player's sideways offset the camera follows (0..1). */
     followX: 0.55,
@@ -68,6 +70,22 @@ export const CONFIG = {
     /** Exponential smoothing rates (per second). */
     dampX: 8,
     dampY: 5,
+  },
+
+  detective: {
+    /** Gap (world units) when he is right on Jack's tail. */
+    closeGap: 3.4,
+    /** Sideways offset from Jack's lane so he never hides Jack from the camera. */
+    sideOffset: 1.35,
+    /** Gap when he has fallen back out of view behind the camera. */
+    farGap: 16,
+    /** Seconds he stays on Jack's heels at the start of a run. */
+    startChaseTime: 2.6,
+    /** How quickly he closes in / drops back (per second smoothing rate). */
+    approachRate: 3.2,
+    retreatRate: 0.9,
+    /** He is hidden (and skipped) beyond this gap. */
+    hideGap: 11,
   },
 
   world: {
