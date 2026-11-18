@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { toon } from '../render/ToonMaterials';
 import { outlineTree } from '../render/Outline';
+import { mergeStatic } from '../render/Merge';
 
 /** The stolen Golden Teapot, built from primitives (used in the intro and on Jack's back later). */
 export function buildTeapot(): THREE.Group {
@@ -24,6 +25,7 @@ export function buildTeapot(): THREE.Group {
   handle.position.set(-0.6, 0.05, 0);
   handle.rotation.z = Math.PI * 0.4;
   g.add(handle);
+  mergeStatic(g);
   outlineTree(g);
   return g;
 }

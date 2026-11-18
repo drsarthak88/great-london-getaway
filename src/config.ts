@@ -15,6 +15,8 @@ export const CONFIG = {
     toonSteps: 4,
     /** Thickness of inverted-hull outlines in world units. */
     outlineThickness: 0.035,
+    /** Thinner ink line for characters, which are small on screen and seen close up. */
+    characterOutline: 0.022,
     fogNear: 60,
     fogFar: 170,
     /** Largest simulation step; longer frames (tab switches, hitches) are clamped. */
@@ -56,10 +58,10 @@ export const CONFIG = {
   },
 
   camera: {
-    height: 4.1,
-    distance: 7,
-    portraitHeight: 4.9,
-    portraitDistance: 8.4,
+    height: 4.7,
+    distance: 7.4,
+    portraitHeight: 5.4,
+    portraitDistance: 8.8,
     lookAhead: 9,
     /** How much of the player's sideways offset the camera follows (0..1). */
     followX: 0.55,
@@ -68,6 +70,78 @@ export const CONFIG = {
     /** Exponential smoothing rates (per second). */
     dampX: 8,
     dampY: 5,
+  },
+
+  detective: {
+    /** Gap (world units) when he is right on Jack's tail. */
+    closeGap: 3.4,
+    /** Sideways offset from Jack's lane so he never hides Jack from the camera. */
+    sideOffset: 1.35,
+    /** Gap when he has fallen back out of view behind the camera. */
+    farGap: 16,
+    /** Seconds he stays on Jack's heels at the start of a run. */
+    startChaseTime: 2.6,
+    /** How quickly he closes in / drops back (per second smoothing rate). */
+    approachRate: 3.2,
+    retreatRate: 0.9,
+    /** He is hidden (and skipped) beyond this gap. */
+    hideGap: 11,
+  },
+
+  obstacles: {
+    /** Patterns are spawned until this far ahead of the player. */
+    spawnAhead: 150,
+    /** Track distance where the first pattern starts (a clear runway before it). */
+    firstAt: 45,
+    /** Minimum clear road between patterns, and extra per unit of speed. */
+    gapBase: 7,
+    gapPerSpeed: 0.55,
+    /** Obstacles this far behind the player are recycled. */
+    recycleBehind: 20,
+    /** Speed of oncoming buses and cabs (track units per second). */
+    oncomingBusSpeed: 8,
+    oncomingCabSpeed: 10,
+    /** Player feet within this of a surface's top count as "on it" (step-up allowance). */
+    stepUp: 0.55,
+    /** Distance per difficulty level (more and harder patterns unlock). */
+    levelEvery: 450,
+    maxLevel: 4,
+  },
+
+  coins: {
+    /** Floating height of coins above the surface they sit on. */
+    hover: 0.65,
+    spacing: 2.3,
+    /** Chance each spawned coin is a gold sovereign instead of a penny. */
+    sovereignChance: 0.03,
+    pennyValue: 1,
+    sovereignValue: 10,
+    /** A Teapot Token appears somewhere in each stretch of this many units. */
+    tokenEvery: [650, 1100] as const,
+    /** Pickup reach around the player. */
+    reachX: 0.85,
+    reachD: 1.0,
+    spin: 3.2,
+  },
+
+  score: {
+    /** Points per unit of distance, before the multiplier. */
+    perMetre: 1,
+    /** Points per coin value, before the multiplier. */
+    perCoin: 5,
+  },
+
+  stumble: {
+    /** A second stumble within this many seconds of the first gets you caught. */
+    window: 10,
+    /** Grace period after a stumble during which further hits are ignored. */
+    grace: 0.9,
+    /** Puddles slow you to this fraction of speed... */
+    puddleSlow: 0.72,
+    /** ...for this long. */
+    puddleTime: 1.2,
+    /** Length of the "Got you!" catch scene before Game Over. */
+    catchTime: 2.0,
   },
 
   world: {
