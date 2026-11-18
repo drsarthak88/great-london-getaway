@@ -13,6 +13,8 @@ export class Chase {
   private closeTimer = 0;
   /** Seconds left in which a second stumble means getting caught. */
   stumbleTimer = 0;
+  /** >1 where Bones knows the streets (Baker Street): closes in faster, remembers longer. */
+  boost = 1;
 
   constructor(private readonly cfg = CONFIG.detective) {}
 
@@ -21,6 +23,7 @@ export class Chase {
     this.gap = gap;
     this.closeTimer = 0;
     this.stumbleTimer = 0;
+    this.boost = 1;
   }
 
   /**
@@ -29,8 +32,8 @@ export class Chase {
    */
   stumble(window: number = CONFIG.stumble.window): StumbleResult {
     if (this.stumbleTimer > 0) return 'caught';
-    this.stumbleTimer = window;
-    this.pullClose(window);
+    this.stumbleTimer = window * (1 + (this.boost - 1) * 0.5);
+    this.pullClose(this.stumbleTimer);
     return 'warned';
   }
 
@@ -62,7 +65,7 @@ export class Chase {
     if (this.stumbleTimer > 0) this.stumbleTimer = Math.max(0, this.stumbleTimer - dt);
     if (this.closeTimer > 0) {
       this.closeTimer = Math.max(0, this.closeTimer - dt);
-      this.gap = damp(this.gap, this.cfg.closeGap, this.cfg.approachRate, dt);
+      this.gap = damp(this.gap, this.cfg.closeGap, this.cfg.approachRate * this.boost, dt);
     } else {
       this.gap = damp(this.gap, this.cfg.farGap, this.cfg.retreatRate, dt);
     }

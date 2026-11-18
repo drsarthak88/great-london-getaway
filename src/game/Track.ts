@@ -4,6 +4,8 @@ import { OBSTACLES, Obstacle } from './ObstacleTypes';
 import { laneX } from './Lanes';
 import { mulberry32 } from '../utils/random';
 import { pickPower, type PowerKind } from '../powerups/PowerUps';
+import { nextBridgeGap, zoneAt } from './Zones';
+import type { Weather } from './Weather';
 
 /** Collectibles on the road. 'power' is a power-up pickup (see `power`). */
 export type CoinKind = 'penny' | 'sovereign' | 'token' | 'power';
@@ -52,6 +54,8 @@ export class Track {
   private skyY = 0;
   private lastPattern = '';
   private readonly order = [0, 1, 2, 3, 4, 5];
+  /** Optional weather schedule: drizzle makes puddles more likely. */
+  weather: Weather | null = null;
 
   constructor(obstacleCap = 56, coinCap = 240) {
     for (let i = 0; i < obstacleCap; i++) this.obstacles.push(new Obstacle());
@@ -131,7 +135,15 @@ export class Track {
 
   private spawnNext(distance: number, speed: number): void {
     const D = this.nextD;
-    const pattern = this.pickPattern();
+    // Tower Bridge: when a lifted bascule is coming up, it gets the road to itself.
+    const gapAt = nextBridgeGap(D);
+    if (gapAt - D < 34) {
+      this.placeBascule(gapAt);
+      this.nextD = gapAt + OBSTACLES.gap.length + this.gapFor(speed);
+      return;
+    }
+    // Leave the road clear in front of an upcoming gap.
+    const pattern = this.pickPattern(D, gapAt - D - this.gapFor(speed) - 2);
     const lanes = this.pickLanes(pattern, D);
     const gap = this.gapFor(speed);
     if (lanes) {
@@ -151,16 +163,49 @@ export class Track {
     }
   }
 
-  private pickPattern(): Pattern {
+  /** Weight of a pattern here: level, zone tweaks (more guards at the palace...) and weather. */
+  private weightOf(p: Pattern, D: number, maxLength: number): number {
+    if (p.minLevel > this.level || p.id === this.lastPattern || p.length > maxLength) return 0;
+    const zw = zoneAt(D).patternWeights?.[p.id];
+    let w = p.weight * (zw ?? 1);
+    if (p.id === 'puddles' && this.weather && this.weather.current(D) === 'drizzle') w *= CONFIG.weather.drizzlePuddles;
+    return w;
+  }
+
+  private pickPattern(D = 0, maxLength = Infinity): Pattern {
     let total = 0;
-    for (const p of PATTERNS) if (p.minLevel <= this.level && p.id !== this.lastPattern) total += p.weight;
+    for (const p of PATTERNS) total += this.weightOf(p, D, maxLength);
     let r = this.rng() * total;
     for (const p of PATTERNS) {
-      if (p.minLevel > this.level || p.id === this.lastPattern) continue;
-      r -= p.weight;
+      const w = this.weightOf(p, D, maxLength);
+      if (w <= 0) continue;
+      r -= w;
       if (r <= 0) return p;
     }
-    return PATTERNS[0];
+    return PATTERNS.find((p) => p.id === 'coinLine') ?? PATTERNS[0];
+  }
+
+  /** A lifted bascule: a gap across all three lanes, with a coin arc to jump along. */
+  private placeBascule(at: number): void {
+    for (const lane of LANES) {
+      const o = this.allocObstacle();
+      if (o) o.set('gap', lane, laneX(lane), at);
+    }
+    const lane = LANES[Math.floor(this.rng() * 3)];
+    const count = 5;
+    const mid = at + OBSTACLES.gap.length / 2;
+    for (let i = 0; i < count; i++) {
+      const c = this.allocCoin();
+      if (!c) return;
+      const t = i / (count - 1);
+      c.active = true;
+      c.pulled = false;
+      c.kind = 'penny';
+      c.lane = lane;
+      c.x = laneX(lane);
+      c.d = mid + (t - 0.5) * CONFIG.coins.spacing * (count - 1);
+      c.y = CONFIG.coins.hover + 1.7 * Math.sin(Math.PI * t);
+    }
   }
 
   /** Choose a slot→lane mapping that keeps clear of reserved (oncoming) lanes. */

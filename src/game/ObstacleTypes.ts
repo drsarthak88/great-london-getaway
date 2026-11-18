@@ -15,7 +15,8 @@ export type ObstacleKind =
   | 'pigeons'
   | 'guard'
   | 'puddle'
-  | 'ramp';
+  | 'ramp'
+  | 'gap';
 
 export interface ObstacleSpec {
   width: number;
@@ -36,6 +37,8 @@ export interface ObstacleSpec {
   smashable: boolean;
   /** Cannot be passed in its lane except by going round (or flying over). */
   blocking: boolean;
+  /** A hole in the road (Tower Bridge's lifted bascules): jump it or fall in. */
+  pit: boolean;
 }
 
 const base: Omit<ObstacleSpec, 'width' | 'length' | 'height'> = {
@@ -46,6 +49,7 @@ const base: Omit<ObstacleSpec, 'width' | 'length' | 'height'> = {
   ramp: false,
   smashable: false,
   blocking: false,
+  pit: false,
 };
 
 export const OBSTACLES: Record<ObstacleKind, ObstacleSpec> = {
@@ -59,6 +63,7 @@ export const OBSTACLES: Record<ObstacleKind, ObstacleSpec> = {
   guard: { ...base, width: 0.9, length: 0.8, height: 2.6, blocking: true },
   puddle: { ...base, width: 2.2, length: 3.2, height: 0.05, trigger: true, smashable: true },
   ramp: { ...base, width: 2.3, length: 5, height: 3.75, platform: true, ramp: true },
+  gap: { ...base, width: 2.5, length: 3.4, height: 0.05, pit: true },
 };
 
 /** How a lane holding this obstacle can be got past without changing lane. */
@@ -68,6 +73,7 @@ export function passMove(kind: ObstacleKind): 'jump' | 'roll' | 'climb' | 'none'
     case 'postBox':
     case 'cab':
     case 'puddle':
+    case 'gap':
       return 'jump';
     case 'sign':
     case 'pigeons':

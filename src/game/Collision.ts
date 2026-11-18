@@ -21,8 +21,9 @@ export interface PlayerBox {
  * - `stumble`: a glancing or soft hit; Bones catches up.
  * - `bounce`: hit the side while changing lane; stumble and get pushed back.
  * - `puddle`: splashed through a puddle; slows down.
+ * - `fall`: ran into a gap in the road (Tower Bridge) instead of jumping it.
  */
-export type HitKind = 'none' | 'crash' | 'stumble' | 'bounce' | 'puddle';
+export type HitKind = 'none' | 'crash' | 'stumble' | 'bounce' | 'puddle' | 'fall';
 
 /** Top surface height of an obstacle at track distance `d` (ramps slope up). */
 export function surfaceTop(o: Obstacle, d: number): number {
@@ -90,6 +91,12 @@ export function classifyHit(o: Obstacle, prev: PlayerBox, cur: PlayerBox, step: 
   if (ox <= 0) return 'none';
   const od = overlap1D(cur.d - cur.halfD, cur.d + cur.halfD, o.d, o.far);
   if (od <= 0) return 'none';
+
+  if (s.pit) {
+    // Fall in only with feet on the road level and well over the hole.
+    const over = Math.abs(cur.x - o.x) < halfOW && cur.d > o.d + 0.45 && cur.d < o.far - 0.45;
+    return over && cur.y < 0.08 ? 'fall' : 'none';
+  }
 
   if (s.trigger) {
     // Only splashes if you run through it on the ground.

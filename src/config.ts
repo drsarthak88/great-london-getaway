@@ -191,6 +191,27 @@ export const CONFIG = {
     shieldGrace: 1.4,
   },
 
+  zones: {
+    /** Length of each zone; they cycle in order. */
+    length: 480,
+    /** Colours blend into the next zone over this final stretch. */
+    blend: 70,
+  },
+
+  weather: {
+    /** Clear road between weather events (random in this range). */
+    gap: [550, 950] as const,
+    /** Length of a fog patch or drizzle shower. */
+    length: [220, 320] as const,
+    /** Fade in/out distance. */
+    ramp: 45,
+    /** Fog distances at full fog. */
+    fogNear: 10,
+    fogFar: 52,
+    /** Puddle patterns are this much more likely during drizzle. */
+    drizzlePuddles: 5,
+  },
+
   world: {
     /** Length of one recycled track chunk. */
     chunkLength: 40,
@@ -212,8 +233,8 @@ export const CONFIG = {
   },
 
   colors: {
-    skyTop: 0xa9d4f0,
-    skyBottom: 0xfbe3c4,
+    skyTop: 0x3fb6ff,
+    skyBottom: 0xfff0b8,
     road: 0x7d817a,
     roadMarking: 0xf5f0e0,
     pavement: 0xcfc6b4,
@@ -222,7 +243,7 @@ export const CONFIG = {
     gold: 0xf0b429,
     ink: 0x2b2118,
     ginger: 0xe8862a,
-    buildings: [0xc1674c, 0xe2c79f, 0xa9584a, 0xd9b48f, 0xb8c4c9, 0xe8d8b8, 0x9c6b5a, 0xc9a27e],
+    buildings: [0xff6b3d, 0xffc93c, 0x4cc96f, 0xff4d6d, 0x46b5ff, 0xfff1d0, 0xff8fb1, 0x2ec4b6],
   },
 } as const;
 

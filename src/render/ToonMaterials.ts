@@ -15,8 +15,8 @@ export function getToonGradient(steps: number = CONFIG.render.toonSteps): THREE.
   if (gradientMap) return gradientMap;
   const data = new Uint8Array(steps * 4);
   for (let i = 0; i < steps; i++) {
-    // Lift the darkest band so shadows stay warm and readable rather than black.
-    const v = Math.round(255 * (0.35 + 0.65 * (i / (steps - 1))));
+    // Lift the darkest band a lot: shadows stay bright and colourful, never murky.
+    const v = Math.round(255 * (0.58 + 0.42 * (i / (steps - 1))));
     data[i * 4 + 0] = v;
     data[i * 4 + 1] = v;
     data[i * 4 + 2] = v;

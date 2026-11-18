@@ -43,6 +43,11 @@ export class Hud {
   private shown = { score: -1, coins: -1, mult: -1, distance: -1 };
   private readonly powerEls = new Map<PowerKind, { el: HTMLElement; ring: SVGCircleElement; shown: number }>();
   private toastTimer = 0;
+  private readonly zoneEl: HTMLElement;
+  private zoneTimer = 0;
+  private readonly cardEl: HTMLElement;
+  private cardTimer = 0;
+  private readonly cardQueue: { title: string; fact: string }[] = [];
 
   constructor(root: HTMLElement, handlers: { onPause: () => void; onResume: () => void; onRestart: () => void }) {
     this.el = document.createElement('div');
@@ -71,6 +76,13 @@ export class Hud {
         ).join('')}
       </div>
       <div class="hud-toast" role="status" aria-live="polite" hidden></div>
+      <div class="hud-zone" aria-live="polite" hidden></div>
+      <aside class="hud-postcard" aria-live="polite" hidden>
+        <div class="hud-postcard-stamp" aria-hidden="true"></div>
+        <div class="hud-postcard-kicker">Did you know?</div>
+        <div class="hud-postcard-title"></div>
+        <p class="hud-postcard-fact"></p>
+      </aside>
       <div class="hud-gotyou" hidden>Got you!</div>
       <div class="hud-prompt">
         <h1>The Great London Getaway</h1>
@@ -101,6 +113,8 @@ export class Hud {
     this.overCard = q('.hud-overcard');
     this.overBody = q('.hud-over-body');
     this.topBar = q('.hud-top');
+    this.zoneEl = q('.hud-zone');
+    this.cardEl = q('.hud-postcard');
     for (const k of POWER_KINDS) {
       const el = q<HTMLElement>(`[data-power="${k}"]`);
       this.powerEls.set(k, { el, ring: el.querySelector('.hud-power-ring') as SVGCircleElement, shown: -1 });
@@ -120,6 +134,54 @@ export class Hud {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.toastEl.hidden = true;
     }
+    if (this.zoneTimer > 0) {
+      this.zoneTimer -= dt;
+      if (this.zoneTimer <= 0) this.zoneEl.hidden = true;
+    }
+    if (this.cardTimer > 0) {
+      this.cardTimer -= dt;
+      if (this.cardTimer <= 0) {
+        this.cardEl.hidden = true;
+        // Next postcard after a short pause.
+        if (this.cardQueue.length) this.cardTimer = -0.6;
+      }
+    } else if (this.cardTimer < 0) {
+      this.cardTimer = Math.min(0, this.cardTimer + dt);
+      if (this.cardTimer === 0 && this.cardQueue.length) this.openCard(this.cardQueue.shift()!);
+    } else if (this.cardQueue.length) {
+      this.openCard(this.cardQueue.shift()!);
+    }
+  }
+
+  /** Big storybook title as you enter a new part of London. */
+  showZone(name: string): void {
+    this.zoneEl.textContent = name;
+    this.zoneEl.hidden = false;
+    // Restart the slide-in animation.
+    this.zoneEl.classList.remove('hud-zone-in');
+    void this.zoneEl.offsetWidth;
+    this.zoneEl.classList.add('hud-zone-in');
+    this.zoneTimer = 2.8;
+  }
+
+  /** "Did you know?" postcard for a landmark (queued if one is already showing). */
+  showPostcard(title: string, fact: string): void {
+    if (this.cardQueue.length < 3) this.cardQueue.push({ title, fact });
+  }
+
+  private openCard(c: { title: string; fact: string }): void {
+    (this.cardEl.querySelector('.hud-postcard-title') as HTMLElement).textContent = c.title;
+    (this.cardEl.querySelector('.hud-postcard-fact') as HTMLElement).textContent = c.fact;
+    this.cardEl.hidden = false;
+    this.cardTimer = 6;
+  }
+
+  clearPopups(): void {
+    this.cardQueue.length = 0;
+    this.cardTimer = 0;
+    this.cardEl.hidden = true;
+    this.zoneTimer = 0;
+    this.zoneEl.hidden = true;
   }
 
   /** Show a timer ring for each active power-up (DOM only touched on visible change). */

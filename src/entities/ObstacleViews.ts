@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Obstacle, ObstacleKind } from '../game/ObstacleTypes';
 import { buildBus } from '../models/Bus';
 import { buildCab } from '../models/Cab';
-import { buildBarrier, buildGuard, buildPhoneBox, buildPigeons, buildPostBox, buildPuddle, buildRamp, buildSign, type PigeonFlock } from '../models/Props';
+import { buildBarrier, buildBridgeGap, buildGuard, buildPhoneBox, buildPigeons, buildPostBox, buildPuddle, buildRamp, buildSign, type PigeonFlock } from '../models/Props';
 
 interface View {
   obj: THREE.Object3D;
@@ -24,6 +24,7 @@ const POOL_SIZES: Record<ObstacleKind, number> = {
   guard: 6,
   puddle: 6,
   ramp: 4,
+  gap: 6,
 };
 
 /**
@@ -54,6 +55,7 @@ export class ObstacleViews {
       guard: buildGuard,
       puddle: buildPuddle,
       ramp: buildRamp,
+      gap: buildBridgeGap,
     };
     for (const kind of Object.keys(POOL_SIZES) as ObstacleKind[]) {
       const views: View[] = [];
