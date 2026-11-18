@@ -54,7 +54,7 @@ export function groundHeight(
   let ground = 0;
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (!o.active || !o.spec.platform) continue;
+    if (!o.active || !o.spec.platform || o.knocked) continue;
     if (!overFootprint(o, x, d)) continue;
     const reachable = feetY >= surfaceTop(o, Math.min(prevD, d)) - step;
     const top = surfaceTop(o, d);
@@ -67,7 +67,7 @@ export function groundHeight(
 export function platformUnder(obstacles: readonly Obstacle[], x: number, d: number, feetY: number): Obstacle | null {
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
-    if (!o.active || !o.spec.platform) continue;
+    if (!o.active || !o.spec.platform || o.knocked) continue;
     if (overFootprint(o, x, d) && Math.abs(feetY - surfaceTop(o, d)) < 0.05) return o;
   }
   return null;
@@ -82,7 +82,7 @@ function overlap1D(aMin: number, aMax: number, bMin: number, bMax: number): numb
  * were last frame to tell a head-on hit from a side-swipe.
  */
 export function classifyHit(o: Obstacle, prev: PlayerBox, cur: PlayerBox, step: number = CONFIG.obstacles.stepUp): HitKind {
-  if (!o.active || o.hit) return 'none';
+  if (!o.active || o.hit || o.knocked) return 'none';
   const s = o.spec;
   const halfOW = s.width / 2;
 

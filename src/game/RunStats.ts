@@ -10,6 +10,11 @@ export class RunStats {
   busesTopped = 0;
   stumbles = 0;
   puddles = 0;
+  powerUps = 0;
+  /** Seconds spent flying with the Helicopter Tail. */
+  flightTime = 0;
+  /** Obstacles sent flying by the Black Cab Dash. */
+  smashed = 0;
 
   reset(): void {
     this.distance = 0;
@@ -21,5 +26,8 @@ export class RunStats {
     this.busesTopped = 0;
     this.stumbles = 0;
     this.puddles = 0;
+    this.powerUps = 0;
+    this.flightTime = 0;
+    this.smashed = 0;
   }
 }

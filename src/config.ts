@@ -144,6 +144,53 @@ export const CONFIG = {
     catchTime: 2.0,
   },
 
+  powerups: {
+    /** Base durations in seconds (shop upgrades add `upgradeStep` per level). */
+    duration: {
+      helicopter: 10,
+      spring: 10,
+      brolly: 10,
+      magnet: 10,
+      helmet: 15,
+      cabDash: 8,
+      teaTime: 8,
+      corgi: 12,
+    },
+    upgradeStep: 0.15,
+    maxLevel: 5,
+    /** A pickup appears somewhere in each stretch of this many units. */
+    spawnEvery: [230, 380] as const,
+    /** Relative pick weights; the corgi is rare. */
+    weights: {
+      helicopter: 1,
+      spring: 1.2,
+      brolly: 1,
+      magnet: 1.5,
+      helmet: 1.3,
+      cabDash: 1,
+      teaTime: 1,
+      corgi: 0.35,
+    },
+    /** Helicopter Tail: cruising height (above bus roofs) and the safe window after landing. */
+    flyHeight: 5.6,
+    landingGrace: 2.4,
+    /** Spring Tail jump height multiplier (3x clears a bus). */
+    springJump: 3,
+    /** Brolly Glide: bigger, floatier jumps and slow falls. */
+    brollyJump: 1.35,
+    brollyGravity: 0.38,
+    /** Teacup Magnet reach (sideways, along the road) and pull speed. */
+    magnetReach: 8,
+    magnetAhead: 12,
+    magnetSpeed: 30,
+    /** Black Cab Dash speed multiplier. */
+    cabSpeed: 1.55,
+    /** Tea Time world speed. */
+    teaTimeScale: 0.5,
+    /** Grace after the helmet absorbs a hit. */
+    shieldGrace: 1.4,
+  },
+
   world: {
     /** Length of one recycled track chunk. */
     chunkLength: 40,

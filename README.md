@@ -25,6 +25,24 @@ procedurally in code. No external models are downloaded.
 - Collect pennies, rare gold sovereigns (worth 10) and Teapot Tokens.
 - Score is distance plus coins, times your multiplier.
 
+## Power-ups
+Grab the floating bubbles on the road. Each lasts 8–15 seconds (shown by a timer
+ring in the corner), and shop upgrades make them last longer.
+
+| Power-up | What it does |
+| --- | --- |
+| Helicopter Tail | Jack's tail becomes a rotor: fly above the traffic along a trail of coins, then land with a short safe window |
+| Spring Tail | The tail coils into a spring: jumps go 3× higher, enough to clear a bus |
+| Brolly Glide | A black umbrella pops open: big, floaty jumps and gentle falls |
+| Teacup Magnet | A floating teacup pulls in nearby coins from every lane |
+| Bobby's Helmet | A police custodian helmet that takes one hit for you |
+| Black Cab Dash | Hop in a cab: an invincible speed burst that smashes barriers and swerves round buses |
+| Tea Time | Time slows to half while steam swirls around Jack |
+| Corgi Pal (rare) | A corgi trots alongside and barks Inspector Bones back by one stumble |
+
+Helicopter, Spring, Brolly and Cab change how Jack moves, so picking one of them up
+replaces another. The others stack.
+
 ## Run locally
 Requires Node.js 20 or newer.
 
@@ -82,7 +100,8 @@ src/
   debug/               model gallery (open the game with ?gallery)
   render/              renderer, toon materials, outlines, canvas textures,
                        static mesh merging
-  ui/                  HTML/CSS overlays (HUD)
+  powerups/            PowerUps timers (pure), magnet pull, effects and pickups
+  ui/                  HTML/CSS overlays (HUD, power-up timer rings)
   utils/               small pure helpers (math, seeded random)
 tests/                 Vitest unit tests for pure logic
 ```

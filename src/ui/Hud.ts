@@ -1,3 +1,18 @@
+import { POWER_KINDS, POWER_NAMES, type PowerKind, type PowerUps } from '../powerups/PowerUps';
+
+/** Tiny inline icons for the power-up timer rings (drawn in a 24x24 box). */
+const POWER_ICONS: Record<PowerKind, string> = {
+  helicopter: '<path d="M3 6h18M12 6v5" stroke-width="2.4"/><circle cx="12" cy="15" r="4" fill="currentColor" stroke="none"/>',
+  spring: '<path d="M6 5h12M6 9h12M6 13h12M6 17h12M18 5l-12 4M18 9l-12 4M18 13l-12 4" stroke-width="1.8"/>',
+  brolly: '<path d="M3 12a9 8 0 0 1 18 0zM12 12v7a2 2 0 0 1-4 0" stroke-width="2"/>',
+  magnet: '<path d="M5 9h12v4a6 6 0 0 1-12 0zM17 10h2a2 2 0 0 1 0 4h-2M4 21h14" stroke-width="2"/>',
+  helmet: '<path d="M6 18c0-9 2-14 6-14s6 5 6 14zM4 18h16" stroke-width="2"/><circle cx="12" cy="11" r="1.6" fill="currentColor"/>',
+  cabDash: '<path d="M3 16v-4l3-4h9l3 4h3v4zM8 8V5h6v3" stroke-width="2"/><circle cx="7" cy="17" r="2" fill="currentColor"/><circle cx="17" cy="17" r="2" fill="currentColor"/>',
+  teaTime: '<path d="M5 10h10v4a5 5 0 0 1-10 0zM15 11h2a2 2 0 0 1 0 4h-2M8 7c0-2 2-2 2-4M11 7c0-2 2-2 2-4" stroke-width="2"/>',
+  corgi: '<path d="M4 14l2-8 3 4h6l3-4 2 8a8 6 0 0 1-16 0z" stroke-width="2"/><circle cx="9" cy="13" r="1.2" fill="currentColor"/><circle cx="15" cy="13" r="1.2" fill="currentColor"/>',
+};
+const RING_LEN = 2 * Math.PI * 21;
+
 export interface RunSummary {
   score: number;
   best: number;
@@ -26,6 +41,7 @@ export class Hud {
   private readonly overBody: HTMLElement;
   private readonly topBar: HTMLElement;
   private shown = { score: -1, coins: -1, mult: -1, distance: -1 };
+  private readonly powerEls = new Map<PowerKind, { el: HTMLElement; ring: SVGCircleElement; shown: number }>();
   private toastTimer = 0;
 
   constructor(root: HTMLElement, handlers: { onPause: () => void; onResume: () => void; onRestart: () => void }) {
@@ -41,6 +57,18 @@ export class Hud {
           <div class="hud-chip hud-coins-chip"><span class="hud-penny" aria-hidden="true"></span><span class="hud-coins">0</span></div>
           <button class="hud-pause" type="button" aria-label="Pause">&#10074;&#10074;</button>
         </div>
+      </div>
+      <div class="hud-powers" aria-label="Active power-ups">
+        ${POWER_KINDS.map(
+          (k) => `<div class="hud-power hud-power-${k}" data-power="${k}" title="${POWER_NAMES[k]}" hidden>
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <circle class="hud-power-track" cx="24" cy="24" r="21"/>
+              <circle class="hud-power-ring" cx="24" cy="24" r="21" stroke-dasharray="${RING_LEN.toFixed(1)}" transform="rotate(-90 24 24)"/>
+              <g transform="translate(12 12)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${POWER_ICONS[k]}</g>
+            </svg>
+            <span class="hud-power-name">${POWER_NAMES[k]}</span>
+          </div>`,
+        ).join('')}
       </div>
       <div class="hud-toast" role="status" aria-live="polite" hidden></div>
       <div class="hud-gotyou" hidden>Got you!</div>
@@ -73,6 +101,10 @@ export class Hud {
     this.overCard = q('.hud-overcard');
     this.overBody = q('.hud-over-body');
     this.topBar = q('.hud-top');
+    for (const k of POWER_KINDS) {
+      const el = q<HTMLElement>(`[data-power="${k}"]`);
+      this.powerEls.set(k, { el, ring: el.querySelector('.hud-power-ring') as SVGCircleElement, shown: -1 });
+    }
     this.pauseBtn.addEventListener('click', handlers.onPause);
     q('[data-act="resume"]').addEventListener('click', handlers.onResume);
     q('[data-act="restart"]').addEventListener('click', handlers.onRestart);
@@ -87,6 +119,21 @@ export class Hud {
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.toastEl.hidden = true;
+    }
+  }
+
+  /** Show a timer ring for each active power-up (DOM only touched on visible change). */
+  setPowers(powers: PowerUps): void {
+    for (const k of POWER_KINDS) {
+      const p = this.powerEls.get(k)!;
+      const f = powers.fraction(k);
+      // Quantise to 1% so the DOM isn't rewritten every frame.
+      const q = Math.ceil(f * 100);
+      if (q === p.shown) continue;
+      if ((q > 0) !== (p.shown > 0)) p.el.hidden = q <= 0;
+      p.shown = q;
+      p.ring.style.strokeDashoffset = String(RING_LEN * (1 - q / 100));
+      p.el.classList.toggle('hud-power-low', q > 0 && q <= 20);
     }
   }
 
