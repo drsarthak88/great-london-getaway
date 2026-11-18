@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "The Great London Getaway: a 3D storybook endless runner through the streets of London.",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",
