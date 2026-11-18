@@ -13,6 +13,9 @@ export class CameraRig {
   private trauma = 0;
   private time = 0;
   reducedMotion = false;
+  /** Extra field of view for speed boosts (Cab Dash, flight), smoothed. */
+  private kick = 0;
+  private lastFov = 0;
 
   constructor(private readonly camera: THREE.PerspectiveCamera) {}
 
@@ -32,8 +35,16 @@ export class CameraRig {
    * Follow the player. The camera rises fully with the surface underfoot (so bus roofs
    * frame like the road) but only partly with jumps (so jumps read as height).
    */
-  update(dt: number, playerX: number, playerY: number, portrait: boolean, groundY = 0, followY: number = CONFIG.camera.followY): void {
+  update(dt: number, playerX: number, playerY: number, portrait: boolean, groundY = 0, followY: number = CONFIG.camera.followY, fovKick = 0): void {
     const c = CONFIG.camera;
+    // Widen the view a touch during speed boosts for a rush of speed.
+    this.kick = damp(this.kick, this.reducedMotion ? 0 : fovKick, 3, dt);
+    const fov = (portrait ? CONFIG.render.fovPortrait : CONFIG.render.fov) + this.kick;
+    if (Math.abs(fov - this.lastFov) > 0.01) {
+      this.lastFov = fov;
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.x = damp(this.x, playerX * c.followX, c.dampX, dt);
     this.ground = damp(this.ground, groundY, 4, dt);
     this.y = damp(this.y, this.ground + (playerY - this.ground) * followY, c.dampY, dt);

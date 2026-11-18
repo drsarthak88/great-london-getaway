@@ -77,6 +77,29 @@ drizzle showers (rain and extra puddles), followed by a rainbow.
 - **Settings:** music and sound volume, reduced motion, colour-blind friendly UI.
 - Progress saves automatically on the device.
 
+## Sound
+All sound is made live with the Web Audio API, so there are no audio files to download:
+- **Music:** an original, bouncy music-hall tune, with a gentler version on the menus.
+  It slows down during Tea Time.
+- **Sound effects:** coins, jumps, rolls, crashes, splashes, a police whistle when
+  you're caught, a corgi bark, a taxi horn, a helicopter rotor and a kettle whistle.
+- **Big Ben:** plays the Westminster Quarters (public domain) on synthesised bells
+  as you pass.
+
+Sound starts after the first tap or key press (browsers require this). Music and
+sound-effect volumes are in Settings.
+
+## Performance
+- **Characters:** each one is a single skinned mesh (a few draw calls instead of dozens).
+- **Street:** furniture is instanced once across all chunks, and static props and
+  landmarks are merged into vertex-coloured meshes.
+- **Sky:** the clouds are merged into one mesh.
+- **Draw calls:** a busy scene draws about 85–150 times per frame.
+- **Adaptive resolution:** if a device can't keep up, the render resolution steps down
+  automatically (and back up when there's headroom). High-DPI phones skip costly MSAA.
+- **No per-frame garbage:** pooled obstacles, coins and particles mean no
+  garbage-collection hitches during a run.
+
 ## Phones, tablets and desktop
 The game runs in any modern browser. Touch controls (swipe), notch-safe layout and
 menus that scale with the screen make it comfortable on phones, iPads/tablets and

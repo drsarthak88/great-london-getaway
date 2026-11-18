@@ -8,6 +8,10 @@ created procedurally in code for this project.
 - [Three.js](https://threejs.org/) (MIT licence)
 - [Vite](https://vite.dev/) (MIT licence)
 
+## Music and sound
+The music is an original composition, and all sound effects are synthesised in code
+(`src/audio/Audio.ts`).
+
 ## Public-domain material
 - The Westminster Quarters chime (1793) is in the public domain.
 - The Union Flag shown on the palace and Parliament is a national flag, drawn in code.

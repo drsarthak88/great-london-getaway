@@ -1,23 +1,43 @@
-/** Game events other systems (audio, missions) can listen to. */
-export type GameEvent =
-  | { type: 'chime' }
-  | { type: 'zone'; zone: string }
-  | { type: 'landmark'; id: string }
-  | { type: 'powerup'; kind: string }
-  | { type: 'coin'; kind: string }
-  | { type: 'jump' }
-  | { type: 'roll' }
-  | { type: 'stumble' }
-  | { type: 'caught' };
+/**
+ * Game events for audio, effects and (later) analytics or achievements. Emitted as a
+ * type plus an optional detail string, so frequent events (coins) allocate nothing.
+ */
+export type GameEventType =
+  | 'chime'
+  | 'zone'
+  | 'landmark'
+  | 'powerup'
+  | 'powerEnd'
+  | 'coin'
+  | 'jump'
+  | 'land'
+  | 'roll'
+  | 'lane'
+  | 'stumble'
+  | 'crash'
+  | 'fall'
+  | 'caught'
+  | 'shield'
+  | 'puddle'
+  | 'smash'
+  | 'bark'
+  | 'mission'
+  | 'continue'
+  | 'start'
+  | 'pause'
+  | 'resume'
+  | 'gameover';
+
+export type GameListener = (type: GameEventType, detail: string) => void;
 
 export class Events {
-  private readonly listeners: ((e: GameEvent) => void)[] = [];
+  private readonly listeners: GameListener[] = [];
 
-  on(fn: (e: GameEvent) => void): void {
+  on(fn: GameListener): void {
     this.listeners.push(fn);
   }
 
-  emit(e: GameEvent): void {
-    for (const fn of this.listeners) fn(e);
+  emit(type: GameEventType, detail = ''): void {
+    for (let i = 0; i < this.listeners.length; i++) this.listeners[i](type, detail);
   }
 }

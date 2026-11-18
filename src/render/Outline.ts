@@ -22,9 +22,13 @@ export function getOutlineMaterial(thickness: number = CONFIG.render.outlineThic
       vertexShader: /* glsl */ `
         uniform float uThickness;
         #include <common>
+        #include <skinning_pars_vertex>
         void main() {
           #include <beginnormal_vertex>
+          #include <skinbase_vertex>
+          #include <skinnormal_vertex>
           #include <begin_vertex>
+          #include <skinning_vertex>
           // Push along the object-space normal, corrected for non-uniform scale.
           vec3 n = normalize(objectNormal);
           vec3 scale = vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz));
@@ -56,7 +60,17 @@ export function getOutlineMaterial(thickness: number = CONFIG.render.outlineThic
 export function addOutline(mesh: THREE.Mesh, thickness?: number): THREE.Mesh {
   const mat = getOutlineMaterial(thickness);
   let hull: THREE.Mesh;
-  if ((mesh as THREE.InstancedMesh).isInstancedMesh) {
+  if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
+    // Follow the same skeleton so the outline bends with the character.
+    const src = mesh as THREE.SkinnedMesh;
+    const sk = new THREE.SkinnedMesh(src.geometry, mat);
+    sk.frustumCulled = false;
+    hull = sk;
+    hull.name = 'outline';
+    mesh.add(hull);
+    sk.bind(src.skeleton, src.bindMatrix);
+    return hull;
+  } else if ((mesh as THREE.InstancedMesh).isInstancedMesh) {
     // Share the instance matrices so the hull always follows its source instances.
     const src = mesh as THREE.InstancedMesh;
     const inst = new THREE.InstancedMesh(src.geometry, mat, src.count);

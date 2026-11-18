@@ -11,11 +11,20 @@ export class Renderer {
   readonly camera: THREE.PerspectiveCamera;
   readonly sun: THREE.DirectionalLight;
   portrait = false;
+  /** Current and maximum render resolution scale (adaptive). */
+  ratio = 1;
+  private readonly maxRatio: number;
+  private slowTime = 0;
+  private fastTime = 0;
   private resizeListeners: Array<() => void> = [];
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.render.maxPixelRatio));
+    const dpr = window.devicePixelRatio || 1;
+    // High-DPI phone screens are sharp enough without MSAA, which is costly on mobile GPUs.
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: dpr < 2, powerPreference: 'high-performance' });
+    this.maxRatio = Math.min(dpr, CONFIG.render.maxPixelRatio);
+    this.ratio = this.maxRatio;
+    this.renderer.setPixelRatio(this.ratio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     // The sky dome (models/Sky.ts) paints the background.
@@ -41,6 +50,36 @@ export class Renderer {
 
   render(): void {
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Adaptive resolution: if frames are consistently slow, render fewer pixels; if
+   * there is plenty of headroom again, step back up. `frameSeconds` is the real frame time.
+   */
+  adapt(frameSeconds: number): void {
+    if (frameSeconds <= 0 || frameSeconds > 0.25) return; // ignore tab switches and hitches
+    const min = 0.75;
+    if (frameSeconds > 1 / 45) {
+      this.slowTime += frameSeconds;
+      this.fastTime = 0;
+      if (this.slowTime > 2 && this.ratio > min) {
+        this.setRatio(Math.max(min, this.ratio - 0.25));
+        this.slowTime = 0;
+      }
+    } else if (frameSeconds < 1 / 58) {
+      this.fastTime += frameSeconds;
+      this.slowTime = Math.max(0, this.slowTime - frameSeconds);
+      if (this.fastTime > 6 && this.ratio < this.maxRatio) {
+        this.setRatio(Math.min(this.maxRatio, this.ratio + 0.25));
+        this.fastTime = 0;
+      }
+    }
+  }
+
+  private setRatio(r: number): void {
+    this.ratio = r;
+    this.renderer.setPixelRatio(r);
+    this.renderer.setSize(window.innerWidth, window.innerHeight, false);
   }
 
   private resize = (): void => {

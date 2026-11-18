@@ -1,5 +1,25 @@
 import * as THREE from 'three';
 import type { BackdropId } from '../data/zones';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+/** Merge meshes (all children of `g`) into one geometry with baked vertex colours. */
+function mergeColoured(g: THREE.Group): THREE.BufferGeometry {
+  g.updateMatrixWorld(true);
+  const geos: THREE.BufferGeometry[] = [];
+  g.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const geo = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(m.matrixWorld);
+    for (const k of Object.keys(geo.attributes)) if (k !== 'position') geo.deleteAttribute(k);
+    const col = (m.material as THREE.MeshBasicMaterial).color;
+    const n = geo.attributes.position.count;
+    const arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) arr.set([col.r, col.g, col.b], i * 3);
+    geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    geos.push(geo);
+  });
+  return mergeGeometries(geos, false)!;
+}
 
 /**
  * A bright storybook sky: gradient dome, puffy cartoon clouds, an optional rainbow,
@@ -12,9 +32,10 @@ export class Sky {
     top: { value: new THREE.Color(0x3fb6ff) },
     bottom: { value: new THREE.Color(0xfff0b8) },
   };
-  private readonly clouds: THREE.Group[] = [];
+  /** All the clouds merged into one mesh, slowly turning round the sky. */
+  private readonly cloudLayer: THREE.Mesh;
   private readonly rainbow: THREE.Group;
-  private readonly rainbowMats: THREE.MeshBasicMaterial[] = [];
+  private readonly rainbowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, fog: false, depthWrite: false });
   private readonly backdrops = new Map<BackdropId, THREE.Group>();
   private readonly backdropMat: THREE.MeshBasicMaterial;
   private time = 0;
@@ -51,6 +72,7 @@ export class Sky {
     const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
     const shadeMat = new THREE.MeshBasicMaterial({ color: 0xe6f1ff, fog: false });
     const puff = new THREE.SphereGeometry(1, 12, 8);
+    const cloudGroup = new THREE.Group();
     for (let i = 0; i < 9; i++) {
       const c = new THREE.Group();
       const n = 4 + (i % 3);
@@ -63,20 +85,17 @@ export class Sky {
       }
       const a = (i / 9) * Math.PI * 1.4 - Math.PI * 0.7;
       c.position.set(Math.sin(a) * 210, 55 + (i % 4) * 16, -Math.cos(a) * 210);
-      c.userData.speed = 0.6 + (i % 3) * 0.3;
-      this.root.add(c);
-      this.clouds.push(c);
+      cloudGroup.add(c);
     }
+    this.cloudLayer = new THREE.Mesh(mergeColoured(cloudGroup), new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }));
+    this.root.add(this.cloudLayer);
 
     // Rainbow arc (shown after a drizzle shower).
     this.rainbow = new THREE.Group();
     const bands = [0xff3b3b, 0xff9f1c, 0xffe14d, 0x4cd964, 0x3fa9ff, 0x7b5cff];
-    bands.forEach((col, i) => {
-      const m = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, fog: false, depthWrite: false });
-      this.rainbowMats.push(m);
-      const arc = new THREE.Mesh(new THREE.TorusGeometry(120 - i * 4, 2.1, 6, 64, Math.PI), m);
-      this.rainbow.add(arc);
-    });
+    const arcs = new THREE.Group();
+    bands.forEach((col, i) => arcs.add(new THREE.Mesh(new THREE.TorusGeometry(120 - i * 4, 2.1, 6, 64, Math.PI), new THREE.MeshBasicMaterial({ color: col }))));
+    this.rainbow.add(new THREE.Mesh(mergeColoured(arcs), this.rainbowMat));
     this.rainbow.position.set(30, -10, -230);
     this.rainbow.renderOrder = -8;
     this.root.add(this.rainbow);
@@ -84,7 +103,7 @@ export class Sky {
     // Skyline silhouettes, tinted toward the horizon colour.
     this.backdropMat = new THREE.MeshBasicMaterial({ color: 0xbfd9f2, fog: false });
     for (const id of ['bigBen', 'eye', 'shard', 'gherkin', 'dome', 'bridge'] as BackdropId[]) {
-      const g = backdrop(id, this.backdropMat);
+      const g = mergeBackdrop(backdrop(id, this.backdropMat), this.backdropMat);
       g.visible = false;
       g.renderOrder = -9;
       g.scale.setScalar(0.65);
@@ -110,16 +129,13 @@ export class Sky {
   /** 0..1 rainbow visibility. */
   setRainbow(amount: number): void {
     this.rainbow.visible = amount > 0.01;
-    for (const m of this.rainbowMats) m.opacity = 0.75 * amount;
+    this.rainbowMat.opacity = 0.75 * amount;
   }
 
   update(dt: number, camera: THREE.Camera): void {
     this.time += dt;
     this.root.position.set(camera.position.x, 0, camera.position.z);
-    for (const c of this.clouds) {
-      c.position.x += dt * c.userData.speed;
-      if (c.position.x > 240) c.position.x = -240;
-    }
+    this.cloudLayer.rotation.y += dt * 0.004;
   }
 }
 
@@ -170,4 +186,16 @@ function backdrop(id: BackdropId, mat: THREE.Material): THREE.Group {
       break;
   }
   return g;
+}
+
+/** Collapse a backdrop silhouette into one mesh (single colour). */
+function mergeBackdrop(g: THREE.Group, mat: THREE.Material): THREE.Group {
+  const pos = g.position.clone();
+  g.position.set(0, 0, 0);
+  const geo = mergeColoured(g);
+  geo.deleteAttribute('color');
+  const out = new THREE.Group();
+  out.add(new THREE.Mesh(geo, mat));
+  out.position.copy(pos);
+  return out;
 }

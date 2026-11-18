@@ -4,6 +4,7 @@ import type { Player } from '../entities/Player';
 import { buildBrolly, buildCorgi, buildHelmet, buildRotor, buildSpring, buildSteam, buildTeacup, type CorgiModel } from '../models/PowerUpModels';
 import { buildCab } from '../models/Cab';
 import { damp } from '../utils/math';
+import { setBoneVisible } from '../render/Skin';
 
 /**
  * The look of each active power-up: things attached to Jack's rig (rotor, spring,
@@ -62,7 +63,7 @@ export class PowerUpEffects {
 
   private hideAll(): void {
     for (const o of [this.rotor, this.spring, this.brolly, this.helmet, this.teacup, this.cab, this.steam.root, this.corgi.root]) o.visible = false;
-    this.player.rig.tail[0].visible = true;
+    setBoneVisible(this.player.rig.tail[0], true);
   }
 
   /**
@@ -89,7 +90,7 @@ export class PowerUpEffects {
     // --- Spring Tail: the tail becomes a coil that squashes on landing.
     const spring = p.isActive('spring');
     this.spring.visible = spring;
-    rig.tail[0].visible = !spring;
+    setBoneVisible(rig.tail[0], !spring);
     if (spring) {
       if (c.justLanded) this.springSquash = 0.35;
       const target = c.grounded ? 0.55 + 0.08 * Math.sin(this.time * 18) : 0.85;
@@ -125,10 +126,12 @@ export class PowerUpEffects {
       // The cab model faces +z (oncoming); Jack's cab drives away from the camera.
       this.cab.rotation.set(Math.sin(this.time * 20) * 0.015, Math.PI - c.vx * 0.03, c.vx * 0.015);
       rig.root.position.y = 0.08;
-      rig.thighL.visible = rig.thighR.visible = false;
+      setBoneVisible(rig.thighL, false);
+      setBoneVisible(rig.thighR, false);
     } else {
       rig.root.position.y = 0;
-      rig.thighL.visible = rig.thighR.visible = true;
+      setBoneVisible(rig.thighL, true);
+      setBoneVisible(rig.thighR, true);
     }
 
     // --- Tea Time: steam swirls around him.
